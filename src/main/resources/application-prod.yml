@@ -1,0 +1,48 @@
+server:
+  port: 8866
+
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://172.29.36.202:3306/graphic_reasoning?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&rewriteBatchedStatements=true
+    username: ${DB_USER}
+    password: ${DB_PWD}
+  data:
+    redis:
+      host: 172.29.36.202
+      port: 6379
+      password: ${REDIS_PWD}
+      database: 0
+      timeout: 5s
+      lettuce:
+        pool:
+          max-active: 8
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 10MB
+
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+aliyun:
+  oss:
+    # 公网 Endpoint，绝对不能带 http://
+    endpoint: oss-cn-beijing.aliyuncs.com
+    access-key-id: ${OSS_AK}
+    access-key-secret: ${OSS_SK}
+    bucket-name: graphic-push-images
+    url-prefix: https://graphic-push-images.oss-cn-beijing.aliyuncs.com
+    dir-prefix: graphic/
+
+wx:
+  appid: wx22ecdbc18d9f0354
+  secret: 5ab139a70fb59f57a23f6d30ee4c6ee0
