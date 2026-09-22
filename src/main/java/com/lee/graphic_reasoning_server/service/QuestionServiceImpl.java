@@ -62,9 +62,15 @@ public class QuestionServiceImpl implements QuestionService {
 
         // 3. 分别抽
         List<Long> ids = new ArrayList<>();
-        List<Long> unknownIds = questionMapper.randomUnknownIds(userId, dto.getCategory(), dto.getExamType(), targetUnknown);
-        List<Long> correctIds = userQuestionMapper.randomCorrectIds(userId, dto.getCategory(), dto.getExamType(), targetCorrect);
-        List<Long> wrongIds   = userQuestionMapper.randomWrongIds(userId, dto.getCategory(), dto.getExamType(), targetWrong);
+        // 权重分配后调用：
+        List<Long> unknownIds = questionMapper.randomUnknownIds(
+                userId, dto.getCategory(), dto.getExamType(), dto.getExamSubType(), targetUnknown);
+
+        List<Long> correctIds = userQuestionMapper.randomCorrectIds(
+                userId, dto.getCategory(), dto.getExamType(), dto.getExamSubType(), targetCorrect);
+
+        List<Long> wrongIds = userQuestionMapper.randomWrongIds(
+                userId, dto.getCategory(), dto.getExamType(), dto.getExamSubType(), targetWrong);
 
         ids.addAll(unknownIds);
         ids.addAll(correctIds);
@@ -81,7 +87,7 @@ public class QuestionServiceImpl implements QuestionService {
         if (ids.size() < count) {
             int lack = count - ids.size();
             // 先补未答题（数量最多）
-            List<Long> moreUnknown = questionMapper.randomUnknownIds(userId, dto.getCategory(), dto.getExamType(), lack + ids.size());
+            List<Long> moreUnknown = questionMapper.randomUnknownIds(userId, dto.getCategory(), dto.getExamType(), dto.getExamSubType(), lack + ids.size());
             for (Long id : moreUnknown) {
                 if (!ids.contains(id)) {
                     ids.add(id);
@@ -91,7 +97,7 @@ public class QuestionServiceImpl implements QuestionService {
         }
         if (ids.size() < count) {
             int lack = count - ids.size();
-            List<Long> moreCorrect = userQuestionMapper.randomCorrectIds(userId, dto.getCategory(), dto.getExamType(), lack + ids.size());
+            List<Long> moreCorrect = userQuestionMapper.randomCorrectIds(userId, dto.getCategory(), dto.getExamType(), dto.getExamSubType(), lack + ids.size());
             for (Long id : moreCorrect) {
                 if (!ids.contains(id)) {
                     ids.add(id);
@@ -101,7 +107,7 @@ public class QuestionServiceImpl implements QuestionService {
         }
         if (ids.size() < count) {
             int lack = count - ids.size();
-            List<Long> moreWrong = userQuestionMapper.randomWrongIds(userId, dto.getCategory(), dto.getExamType(), lack + ids.size());
+            List<Long> moreWrong = userQuestionMapper.randomWrongIds(userId, dto.getCategory(), dto.getExamType(), dto.getExamSubType(), lack + ids.size());
             for (Long id : moreWrong) {
                 if (!ids.contains(id)) {
                     ids.add(id);
@@ -121,7 +127,7 @@ public class QuestionServiceImpl implements QuestionService {
         if (ids.isEmpty()) return Collections.emptyList();
 
         // 7. 查询题目（selectBatchIds 会走 autoResultMap）
-        List<Question> list = questionMapper.selectBatchIds(ids);
+        List<Question> list = questionMapper.selectByIds(ids);
         Map<Long, Question> map = list.stream()
                 .collect(Collectors.toMap(Question::getId, Function.identity()));
 
@@ -151,6 +157,7 @@ public class QuestionServiceImpl implements QuestionService {
         LambdaQueryWrapper<Question> qw = new LambdaQueryWrapper<Question>()
                 .eq(StrUtil.isNotBlank(dto.getCategory()), Question::getCategory, dto.getCategory())
                 .eq(StrUtil.isNotBlank(dto.getExamType()), Question::getExamType, dto.getExamType())
+                .eq(StrUtil.isNotBlank(dto.getExamSubType()), Question::getExamSubType, dto.getExamSubType())
                 .eq(StrUtil.isNotBlank(dto.getSource()), Question::getSource, dto.getSource())
                 .eq(dto.getDifficulty() != null, Question::getDifficulty, dto.getDifficulty())
                 .like(StrUtil.isNotBlank(dto.getKeyword()), Question::getContent, dto.getKeyword())
@@ -214,7 +221,7 @@ public class QuestionServiceImpl implements QuestionService {
         BeanUtil.copyProperties(dto, q, "analyses");
         questionMapper.updateById(q);
 
-        saveAnalyses(dto.getId(), dto.getAnalyses());   // ★
+        saveAnalyses(dto.getId(), dto.getAnalyses());
     }
 
     @Override
@@ -254,8 +261,8 @@ public class QuestionServiceImpl implements QuestionService {
     }
 
     @Override
-    public List<QuestionSourceStatVO> sourceStats() {
-        return questionMapper.selectSourceStats();
+    public List<QuestionSourceStatVO> sourceStats(String examType, String examSubType, String keyword) {
+        return questionMapper.selectSourceStats(examType, examSubType, keyword);
     }
 
     @Override

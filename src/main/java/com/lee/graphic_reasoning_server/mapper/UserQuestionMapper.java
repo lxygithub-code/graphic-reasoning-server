@@ -33,11 +33,13 @@ public interface UserQuestionMapper extends BaseMapper<UserQuestion> {
             "WHERE q.deleted = 0 AND uq.user_id = #{userId} AND uq.is_correct = 1 " +
             "<if test='category != null and category != \"\"'>AND q.category = #{category}</if> " +
             "<if test='examType != null and examType != \"\"'>AND q.exam_type = #{examType}</if> " +
+            "<if test='examSubType != null and examSubType != \"\"'>AND q.exam_sub_type = #{examSubType}</if> " +
             "ORDER BY RAND() LIMIT #{count}" +
             "</script>")
     List<Long> randomCorrectIds(@Param("userId") Long userId,
                                 @Param("category") String category,
                                 @Param("examType") String examType,
+                                @Param("examSubType") String examSubType,
                                 @Param("count") int count);
 
     /** 抽已答错的题 */
@@ -47,10 +49,12 @@ public interface UserQuestionMapper extends BaseMapper<UserQuestion> {
             "WHERE q.deleted = 0 AND uq.user_id = #{userId} AND uq.is_correct = 0 " +
             "<if test='category != null and category != \"\"'>AND q.category = #{category}</if> " +
             "<if test='examType != null and examType != \"\"'>AND q.exam_type = #{examType}</if> " +
+            "<if test='examSubType != null and examSubType != \"\"'>AND q.exam_sub_type = #{examSubType}</if> " +
             "ORDER BY RAND() LIMIT #{count}" +
             "</script>")
     List<Long> randomWrongIds(@Param("userId") Long userId,
                               @Param("category") String category,
                               @Param("examType") String examType,
+                              @Param("examSubType") String examSubType,
                               @Param("count") int count);
 }

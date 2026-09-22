@@ -5,8 +5,7 @@ import lombok.Data;
 @Data
 public class PracticeRecordVO {
     private Long id;
-    private String examType;
-    private String examTypeLabel;
+    private String category;
     private Integer totalCount;
     private Integer correctCount;
     private Double accuracy;

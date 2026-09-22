@@ -14,6 +14,7 @@ public class QuestionPracticeVO {
     private String category;
     private Integer difficulty;
     private String examType;
+    private String examSubType;
     private String imageUrl;
     /** 用户对该题的作答状态：null 未答 / 1 曾答对 / 0 曾答错 */
     private Integer userLastCorrect;

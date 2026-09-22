@@ -17,4 +17,7 @@ public class PracticeDetailItemVO {
     private Integer duration;            // 本题耗时（秒）
     private String analysis;             // 解析（可选返回）
     private List<QuestionDetailVO.AnalysisVO> analyses;
+    private String source;
+    private String examType;
+    private String examSubType;
 }

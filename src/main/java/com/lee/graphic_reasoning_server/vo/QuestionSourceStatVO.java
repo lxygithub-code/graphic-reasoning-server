@@ -6,4 +6,6 @@ import lombok.Data;
 public class QuestionSourceStatVO {
     private String source;
     private Long count;
+    private String examType;
+    private String examSubType;
 }

@@ -27,6 +27,8 @@ public class QuestionSaveDTO {
 
     private String examType;
 
+    private String examSubType;
+
     private Integer difficulty = 1;
 
     private String imageUrl;

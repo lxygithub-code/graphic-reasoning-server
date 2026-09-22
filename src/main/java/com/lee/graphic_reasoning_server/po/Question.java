@@ -36,6 +36,9 @@ public class Question implements Serializable {
     /** 考试类型编码：guokao/shengkao/shiye */
     private String examType;
 
+    /** 考试二级类型：A/B/C/D/E（仅事业单位使用） */
+    private String examSubType;
+
     /** 难度 1-5 */
     private Integer difficulty;
 

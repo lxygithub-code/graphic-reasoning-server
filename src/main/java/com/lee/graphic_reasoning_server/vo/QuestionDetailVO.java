@@ -15,6 +15,7 @@ public class QuestionDetailVO {
     private String category;
     private Integer difficulty;
     private String examType;
+    private String examSubType;
     private String imageUrl;
 
     /** 分平台解析 */

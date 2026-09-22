@@ -28,7 +28,7 @@ public interface QuestionService {
     void batchDelete(List<Long> ids);
 
     /** 套卷列表（含题目数） */
-    List<QuestionSourceStatVO> sourceStats();
+    List<QuestionSourceStatVO> sourceStats(String examType, String examSubType, String keyword);
 
     /** 某套卷下的所有题目 */
     List<QuestionDetailVO> listBySource(String source);

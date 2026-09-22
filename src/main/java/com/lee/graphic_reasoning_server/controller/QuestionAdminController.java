@@ -56,8 +56,11 @@ public class QuestionAdminController {
 
     /** 套卷列表（含题目数量） */
     @GetMapping("/sources")
-    public R<List<QuestionSourceStatVO>> sources() {
-        return R.ok(questionService.sourceStats());
+    public R<List<QuestionSourceStatVO>> sources(
+            @RequestParam(required = false) String examType,
+            @RequestParam(required = false) String examSubType,
+            @RequestParam(required = false) String keyword) {
+        return R.ok(questionService.sourceStats(examType, examSubType, keyword));
     }
 
     /** 某套卷下的所有题目 */

@@ -18,7 +18,6 @@ public class PracticeRecord implements Serializable {
     /** 用户 id */
     private Long userId;
 
-    /** 练习类型，如 图形推理 */
     private String category;
 
     /** 题目总数 */

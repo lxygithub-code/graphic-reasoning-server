@@ -295,6 +295,9 @@ public class PracticeServiceImpl implements PracticeService {
                 item.setOptions(q.getOptions());
                 item.setAnalysis(q.getAnalysis());
                 item.setAnalyses(loadAnalyses(q.getId()));
+                item.setSource(q.getSource());
+                item.setExamType(q.getExamType());
+                item.setExamSubType(q.getExamSubType());
             }
             items.add(item);
         }
