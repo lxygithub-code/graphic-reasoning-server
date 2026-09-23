@@ -15,5 +15,6 @@ public class DictVO {
     private Integer level;
     private Integer sort;
     private Integer status;
+    private String remark;
     private List<DictVO> children = new ArrayList<>();
 }
