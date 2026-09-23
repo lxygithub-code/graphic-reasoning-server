@@ -19,9 +19,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
@@ -85,7 +85,7 @@ public class AuthServiceImpl implements AuthService {
         String token = JwtUtil.create(user.getId());
         redis.opsForValue().set(TOKEN_KEY_PREFIX + token,
                 String.valueOf(user.getId()),
-                30, TimeUnit.DAYS);
+                Duration.ofDays(30));
 
         LoginVO vo = new LoginVO();
         vo.setToken(token);

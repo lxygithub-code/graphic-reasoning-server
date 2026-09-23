@@ -41,4 +41,10 @@ public class User implements Serializable {
 
     /** 1 启用 0 禁用 */
     private Integer status;
+
+    /** 是否允许评论：0禁用 1允许 */
+    private Integer canComment;
+
+    /** 是否展示评论内容：0隐藏 1展示 */
+    private Integer showComment;
 }

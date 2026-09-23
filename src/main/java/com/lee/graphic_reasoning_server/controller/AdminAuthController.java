@@ -24,10 +24,7 @@ public class AdminAuthController {
 
     @PostMapping("/logout")
     public R<Void> logout(@RequestHeader(value = "Authorization", required = false) String auth) {
-        if (auth != null && auth.startsWith("Bearer ")) {
-            String token = auth.substring(7);
-            redis.delete(AdminServiceImpl.ADMIN_TOKEN_PREFIX + token);
-        }
+        adminService.logout(auth);
         return R.ok();
     }
 }

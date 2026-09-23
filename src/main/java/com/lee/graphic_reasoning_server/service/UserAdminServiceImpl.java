@@ -12,6 +12,7 @@ import com.lee.graphic_reasoning_server.po.User;
 import com.lee.graphic_reasoning_server.vo.AdminUserVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -58,5 +59,20 @@ public class UserAdminServiceImpl implements UserAdminService {
     @Override
     public void delete(Long userId) {
         userMapper.deleteById(userId);
+    }
+
+    @Override
+    @Transactional
+    public void updatePermission(Long userId, Integer canComment, Integer showComment, Integer status) {
+        User user = userMapper.selectById(userId);
+        if (user == null) throw new BizException("用户不存在");
+
+        User update = new User();
+        update.setId(userId);
+        if (canComment != null)  update.setCanComment(canComment);
+        if (showComment != null) update.setShowComment(showComment);
+        if (status != null)      update.setStatus(status);
+
+        userMapper.updateById(update);
     }
 }

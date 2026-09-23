@@ -24,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -88,12 +89,18 @@ public class PracticeServiceImpl implements PracticeService {
             upsertWrong(userId, q.getId());
         }
 
+        // ★ 查当前用户的评论权限
+        User user = userMapper.selectById(userId);
+        Integer canComment = (user != null && user.getCanComment() != null)
+                ? user.getCanComment() : 1;
+
         PracticeSingleVO vo = new PracticeSingleVO();
         vo.setIsCorrect(isCorrect);
         vo.setCorrectOption(q.getCorrectOption());
         vo.setAnalyses(loadAnalyses(q.getId()));
         vo.setComments(loadComments(q.getId()));
         vo.setAnalyses(questionService.listAnalyses(q.getId()));
+        vo.setCanComment(canComment);
         return vo;
     }
 
@@ -220,24 +227,39 @@ public class PracticeServiceImpl implements PracticeService {
                         .eq(QuestionComment::getQuestionId, questionId)
                         .orderByDesc(QuestionComment::getLikeCount)
                         .orderByDesc(QuestionComment::getCreateTime)
-                        .last("LIMIT 5"));
+                        .last("LIMIT 10"));
 
         if (comments.isEmpty()) return Collections.emptyList();
 
-        // 批量查评论者昵称
-        List<Long> userIds = comments.stream().map(QuestionComment::getUserId).distinct().collect(Collectors.toList());
-        Map<Long, String> nicknameMap = userMapper.selectBatchIds(userIds).stream()
-                .collect(Collectors.toMap(User::getId, u -> StrUtil.blankToDefault(u.getNickname(), "匿名用户")));
+        // 批量查评论者
+        List<Long> userIds = comments.stream()
+                .map(QuestionComment::getUserId)
+                .distinct()
+                .collect(Collectors.toList());
+        List<User> users = userMapper.selectByIds(userIds);
+        Map<Long, User> userMap = users.stream()
+                .collect(Collectors.toMap(User::getId, Function.identity()));
 
-        return comments.stream().map(c -> {
-            CommentVO vo = new CommentVO();
-            vo.setId(c.getId());
-            vo.setNickname(nicknameMap.getOrDefault(c.getUserId(), "匿名用户"));
-            vo.setContent(c.getContent());
-            vo.setLikeCount(c.getLikeCount());
-            vo.setCreateTime(c.getCreateTime() == null ? null : c.getCreateTime().format(FMT));
-            return vo;
-        }).collect(Collectors.toList());
+        // 过滤掉 showComment = 0 的用户评论
+        return comments.stream()
+                .filter(c -> {
+                    User author = userMap.get(c.getUserId());
+                    if (author == null) return false;
+                    Integer show = author.getShowComment();
+                    // 默认展示，只有明确为 0 才隐藏
+                    return show == null || show == 1;
+                })
+                .map(c -> {
+                    User author = userMap.get(c.getUserId());
+                    CommentVO vo = new CommentVO();
+                    vo.setId(c.getId());
+                    vo.setNickname(StrUtil.blankToDefault(author.getNickname(), "匿名用户"));
+                    vo.setContent(c.getContent());
+                    vo.setLikeCount(c.getLikeCount());
+                    vo.setCreateTime(c.getCreateTime() == null ? null : c.getCreateTime().format(FMT));
+                    return vo;
+                })
+                .collect(Collectors.toList());
     }
 
     @Override
@@ -314,9 +336,26 @@ public class PracticeServiceImpl implements PracticeService {
         Long userId = UserContext.get();
         if (userId == null) throw new BizException("未登录");
 
-        String key = "comment:rate:" + userId;
-        Boolean ok = redis.opsForValue().setIfAbsent(key, "1", 60, TimeUnit.SECONDS);
-        if (Boolean.FALSE.equals(ok)) throw new BizException("评论太频繁，请稍后再试");
+        // 校验用户是否允许评论
+        User uc = userMapper.selectById(userId);
+        if (uc == null) throw new BizException("用户不存在");
+        if (uc.getCanComment() != null && uc.getCanComment() == 0) {
+            throw new BizException("您的评论权限已被关闭");
+        }
+
+        // 限流：10 秒 1 条
+        String rateKey = "comment:rate:" + userId;
+        Boolean ok = redis.opsForValue().setIfAbsent(rateKey, "1", Duration.ofSeconds(10));
+        if (Boolean.FALSE.equals(ok)) {
+            throw new BizException("评论太频繁，请稍后再试");
+        }
+
+        // 防重复：5 分钟内不能发相同内容
+        String contentKey = "comment:content:" + userId + ":" + dto.getContent().hashCode();
+        Boolean ok2 = redis.opsForValue().setIfAbsent(contentKey, "1", Duration.ofMinutes(5));
+        if (Boolean.FALSE.equals(ok2)) {
+            throw new BizException("请勿重复发布相同内容");
+        }
 
         // 1. 校验内容
         String reason = contentFilter.validate(dto.getContent());

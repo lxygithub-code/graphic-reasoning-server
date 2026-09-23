@@ -9,6 +9,8 @@ public class AdminUserVO {
     private String avatarUrl;
     private Integer gender;
     private Integer status;
+    private Integer canComment;
+    private Integer showComment;
     private String lastLoginTime;
     private String createTime;
 }

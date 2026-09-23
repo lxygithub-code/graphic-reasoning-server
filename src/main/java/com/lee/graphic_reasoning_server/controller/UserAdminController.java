@@ -31,4 +31,15 @@ public class UserAdminController {
         userAdminService.delete(id);
         return R.ok();
     }
+
+    /** 更新用户权限 */
+    @PutMapping("/{id}/permission")
+    public R<Void> updatePermission(
+            @PathVariable Long id,
+            @RequestParam(required = false) Integer canComment,
+            @RequestParam(required = false) Integer showComment,
+            @RequestParam(required = false) Integer status) {
+        userAdminService.updatePermission(id, canComment, showComment, status);
+        return R.ok();
+    }
 }

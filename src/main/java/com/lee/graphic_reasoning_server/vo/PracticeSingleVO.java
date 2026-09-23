@@ -12,4 +12,6 @@ public class PracticeSingleVO {
     private List<CommentVO> comments;
     /** 分平台解析列表 */
     private List<QuestionDetailVO.AnalysisVO> analyses;
+    // 0 禁止 1 允许
+    private Integer canComment;
 }
