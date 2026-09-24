@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+		 xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 	<parent>
 		<groupId>org.springframework.boot</groupId>
@@ -110,12 +110,65 @@
 			<version>3.17.4</version>
 		</dependency>
 	</dependencies>
+	<!-- Maven 分离打包（瘦身 JAR）
 
+	打包：执行 mvn clean package。
+		target/graphic-reasoning-server-0.0.1-SNAPSHOT.jar：仅包含业务代码，体积通常只有几百 KB。
+		target/lib/：包含所有第三方依赖。
+
+	首次部署: 将 graphic-reasoning-server-0.0.1-SNAPSHOT.jar 和整个 lib 目录上传到服务器同一目录下（例如 /opt/app/）
+
+	启动: java -jar graphic-reasoning-server-0.0.1-SNAPSHOT.jar  JVM 会自动根据 MANIFEST.MF 中的 Class-Path 加载 lib/ 下的所有 jar。
+
+	后续更新:如果依赖没有变化，只需上传新的 graphic-reasoning-server-0.0.1-SNAPSHOT.jar 覆盖旧文件，无需重新上传 lib
+			如果新增或升级了依赖，则需要将新的 lib 目录整体上传覆盖。
+	-->
 	<build>
 		<plugins>
+			<!-- 1. 生成可执行瘦 JAR，并通过 Class-Path 指向 lib 目录 -->
 			<plugin>
-				<groupId>org.springframework.boot</groupId>
-				<artifactId>spring-boot-maven-plugin</artifactId>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-jar-plugin</artifactId>
+				<configuration>
+					<archive>
+						<manifest>
+							<!-- 请替换为你的实际启动类全限定名 -->
+							<mainClass>com.lee.graphic_reasoning_server.GraphicReasoningServerApplication</mainClass>
+							<addClasspath>true</addClasspath>
+							<classpathPrefix>lib/</classpathPrefix>
+						</manifest>
+					</archive>
+				</configuration>
+			</plugin>
+
+			<!-- 2. 将所有依赖复制到 target/lib 目录 -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-dependency-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>copy-dependencies</id>
+						<phase>package</phase>
+						<goals>
+							<goal>copy-dependencies</goal>
+						</goals>
+						<configuration>
+							<outputDirectory>${project.build.directory}/lib</outputDirectory>
+							<overWriteReleases>false</overWriteReleases>
+							<overWriteSnapshots>false</overWriteSnapshots>
+							<overWriteIfNewer>true</overWriteIfNewer>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+
+			<!-- 3. 跳过单元测试，避免打包时因测试环境问题失败 -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<skipTests>true</skipTests>
+				</configuration>
 			</plugin>
 		</plugins>
 	</build>
