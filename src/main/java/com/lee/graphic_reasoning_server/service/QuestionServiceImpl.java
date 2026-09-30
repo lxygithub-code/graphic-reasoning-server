@@ -3,6 +3,7 @@ package com.lee.graphic_reasoning_server.service;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lee.graphic_reasoning_server.common.BizException;
 import com.lee.graphic_reasoning_server.common.PageVO;
@@ -33,6 +34,9 @@ public class QuestionServiceImpl implements QuestionService {
 
     private final QuestionMapper questionMapper;
     private final UserQuestionMapper userQuestionMapper;
+    private final QuestionAnalysisMapper analysisMapper;
+
+    // ==================== 原有方法保持不变 ====================
 
     @Override
     public List<QuestionPracticeVO> randomPractice(QuestionRandomDTO dto) {
@@ -42,7 +46,6 @@ public class QuestionServiceImpl implements QuestionService {
         int count = dto.getCount() == null ? 10 : dto.getCount();
         if (count <= 0 || count > 50) count = 10;
 
-        // 1. 校验权重：三者之和必须 100，否则用默认值
         int wUnknown = dto.getWeightUnknown() == null ? 60 : dto.getWeightUnknown();
         int wCorrect = dto.getWeightCorrect() == null ? 20 : dto.getWeightCorrect();
         int wWrong   = dto.getWeightWrong()   == null ? 20 : dto.getWeightWrong();
@@ -50,43 +53,28 @@ public class QuestionServiceImpl implements QuestionService {
             wUnknown = 60; wCorrect = 20; wWrong = 20;
         }
 
-        // 2. 按权重分配名额
         int targetUnknown = Math.max(0, Math.round(count * wUnknown / 100f));
         int targetCorrect = Math.max(0, Math.round(count * wCorrect / 100f));
         int targetWrong   = count - targetUnknown - targetCorrect;
         if (targetWrong < 0) {
-            // 修一下，保证三者加起来是 count
             targetWrong = 0;
             targetUnknown = count - targetCorrect;
         }
 
-        // 3. 分别抽
         List<Long> ids = new ArrayList<>();
-        // 权重分配后调用：
         List<Long> unknownIds = questionMapper.randomUnknownIds(
                 userId, dto.getCategory(), dto.getExamType(), dto.getExamSubType(), targetUnknown);
-
         List<Long> correctIds = userQuestionMapper.randomCorrectIds(
                 userId, dto.getCategory(), dto.getExamType(), dto.getExamSubType(), targetCorrect);
-
         List<Long> wrongIds = userQuestionMapper.randomWrongIds(
                 userId, dto.getCategory(), dto.getExamType(), dto.getExamSubType(), targetWrong);
 
         ids.addAll(unknownIds);
         ids.addAll(correctIds);
         ids.addAll(wrongIds);
-        /**
-         * 4. 抽不满，从其它类补
-         *
-         * 先抽：未答 6 + 已对 2 + 已错 1 = 9 题
-         * 缺 1 题 → 从未答题池补
-         * 未答也不够 → 从已答对池补
-         * 已答对也不够 → 从已答错池补
-         * 全不够 → 返回实际数量（可能少于 count）
-         */
+
         if (ids.size() < count) {
             int lack = count - ids.size();
-            // 先补未答题（数量最多）
             List<Long> moreUnknown = questionMapper.randomUnknownIds(userId, dto.getCategory(), dto.getExamType(), dto.getExamSubType(), lack + ids.size());
             for (Long id : moreUnknown) {
                 if (!ids.contains(id)) {
@@ -116,17 +104,12 @@ public class QuestionServiceImpl implements QuestionService {
             }
         }
 
-        // 5. 打乱顺序
         Collections.shuffle(ids);
-
-        // 6. 截断到 count
         if (ids.size() > count) {
             ids = ids.subList(0, count);
         }
-
         if (ids.isEmpty()) return Collections.emptyList();
 
-        // 7. 查询题目（selectBatchIds 会走 autoResultMap）
         List<Question> list = questionMapper.selectByIds(ids);
         Map<Long, Question> map = list.stream()
                 .collect(Collectors.toMap(Question::getId, Function.identity()));
@@ -181,15 +164,16 @@ public class QuestionServiceImpl implements QuestionService {
         validate(dto);
         Question q = new Question();
         BeanUtil.copyProperties(dto, q, "id", "analyses");
+        // 新增时若前端未传 canExtract，默认 1（可抽取）
+        if (q.getCanExtract() == null) q.setCanExtract(1);
         questionMapper.insert(q);
 
-        saveAnalyses(q.getId(), dto.getAnalyses());   // ★
+        saveAnalyses(q.getId(), dto.getAnalyses());
         return q.getId();
     }
 
     /** 覆盖式写入：先删后插 */
     private void saveAnalyses(Long questionId, List<QuestionSaveDTO.AnalysisItem> analyses) {
-        // 先清空
         analysisMapper.delete(new LambdaQueryWrapper<QuestionAnalysis>()
                 .eq(QuestionAnalysis::getQuestionId, questionId));
 
@@ -199,7 +183,7 @@ public class QuestionServiceImpl implements QuestionService {
         Set<String> usedPlatforms = new HashSet<>();
         for (QuestionSaveDTO.AnalysisItem item : analyses) {
             if (StrUtil.isBlank(item.getPlatform()) || StrUtil.isBlank(item.getContent())) continue;
-            if (usedPlatforms.contains(item.getPlatform())) continue;   // 同平台只留一条
+            if (usedPlatforms.contains(item.getPlatform())) continue;
             usedPlatforms.add(item.getPlatform());
 
             QuestionAnalysis a = new QuestionAnalysis();
@@ -247,7 +231,6 @@ public class QuestionServiceImpl implements QuestionService {
             if (StrUtil.isBlank(opt.getKey())) {
                 throw new BizException("选项 key 不能为空");
             }
-            // type 缺省按 text 处理，防止前端漏传
             if (StrUtil.isBlank(opt.getType())) {
                 opt.setType("text");
             }
@@ -271,7 +254,6 @@ public class QuestionServiceImpl implements QuestionService {
                 .orderByAsc(Question::getId);
 
         if (StrUtil.isBlank(source)) {
-            // 未分类：source 为 null 或 ''
             qw.and(w -> w.isNull(Question::getSource).or().eq(Question::getSource, ""));
         } else {
             qw.eq(Question::getSource, source);
@@ -280,12 +262,10 @@ public class QuestionServiceImpl implements QuestionService {
         List<Question> list = questionMapper.selectList(qw);
         return list.stream().map(q -> {
             QuestionDetailVO vo = new QuestionDetailVO();
-            BeanUtil.copyProperties(q, vo);
+            BeanUtil.copyProperties(q, vo); // canExtract 会自动拷贝
             return vo;
         }).collect(Collectors.toList());
     }
-
-    private final QuestionAnalysisMapper analysisMapper;
 
     @Override
     public List<QuestionDetailVO.AnalysisVO> listAnalyses(Long questionId) {
@@ -306,5 +286,40 @@ public class QuestionServiceImpl implements QuestionService {
     @Override
     public List<ExamTypeCountVO> countByExamType() {
         return questionMapper.selectCountByExamType();
+    }
+
+    // ==================== ★ 新增：可抽取控制 ====================
+
+    @Override
+    @Transactional
+    public int updateSourceExtractable(String source, Integer extractable) {
+        if (extractable == null || (extractable != 0 && extractable != 1)) {
+            throw new BizException("extractable 只能为 0 或 1");
+        }
+
+        LambdaUpdateWrapper<Question> uw = new LambdaUpdateWrapper<Question>()
+                .set(Question::getCanExtract, extractable);
+
+        if (StrUtil.isBlank(source)) {
+            // "未分类"：source 为 null 或空字符串
+            uw.and(w -> w.isNull(Question::getSource).or().eq(Question::getSource, ""));
+        } else {
+            uw.eq(Question::getSource, source);
+        }
+
+        return questionMapper.update(null, uw);
+    }
+
+    @Override
+    @Transactional
+    public void updateExtractable(Long id, Integer extractable) {
+        if (id == null) throw new BizException("id 不能为空");
+        if (extractable == null || (extractable != 0 && extractable != 1)) {
+            throw new BizException("extractable 只能为 0 或 1");
+        }
+        Question q = new Question();
+        q.setId(id);
+        q.setCanExtract(extractable);
+        questionMapper.updateById(q);
     }
 }

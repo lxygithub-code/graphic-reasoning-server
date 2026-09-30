@@ -30,7 +30,9 @@ public interface UserQuestionMapper extends BaseMapper<UserQuestion> {
     @Select("<script>" +
             "SELECT q.id FROM t_question q " +
             "INNER JOIN t_user_question uq ON uq.question_id = q.id " +
-            "WHERE q.deleted = 0 AND uq.user_id = #{userId} AND uq.is_correct = 1 " +
+            "WHERE q.deleted = 0 " +
+            "AND q.can_extract = 1 " +   // ★ 新增：只抽可抽取的题
+            "AND uq.user_id = #{userId} AND uq.is_correct = 1 " +
             "<if test='category != null and category != \"\"'>AND q.category = #{category}</if> " +
             "<if test='examType != null and examType != \"\"'>AND q.exam_type = #{examType}</if> " +
             "<if test='examSubType != null and examSubType != \"\"'>AND q.exam_sub_type = #{examSubType}</if> " +
@@ -46,7 +48,9 @@ public interface UserQuestionMapper extends BaseMapper<UserQuestion> {
     @Select("<script>" +
             "SELECT q.id FROM t_question q " +
             "INNER JOIN t_user_question uq ON uq.question_id = q.id " +
-            "WHERE q.deleted = 0 AND uq.user_id = #{userId} AND uq.is_correct = 0 " +
+            "WHERE q.deleted = 0 " +
+            "AND q.can_extract = 1 " +   // ★ 新增：只抽可抽取的题
+            "AND uq.user_id = #{userId} AND uq.is_correct = 0 " +
             "<if test='category != null and category != \"\"'>AND q.category = #{category}</if> " +
             "<if test='examType != null and examType != \"\"'>AND q.exam_type = #{examType}</if> " +
             "<if test='examSubType != null and examSubType != \"\"'>AND q.exam_sub_type = #{examSubType}</if> " +

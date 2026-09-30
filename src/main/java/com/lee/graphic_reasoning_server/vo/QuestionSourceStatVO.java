@@ -8,4 +8,6 @@ public class QuestionSourceStatVO {
     private Long count;
     private String examType;
     private String examSubType;
+    /** 可抽取的题目数量 */
+    private Integer extractableCount;
 }

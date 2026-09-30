@@ -16,6 +16,7 @@ public interface QuestionMapper extends BaseMapper<Question> {
     @Select("<script>" +
             "SELECT q.id FROM t_question q " +
             "WHERE q.deleted = 0 " +
+            "AND q.can_extract = 1 " +   // ★ 新增：只抽可抽取的题
             "<if test='category != null and category != \"\"'>AND q.category = #{category}</if> " +
             "<if test='examType != null and examType != \"\"'>AND q.exam_type = #{examType}</if> " +
             "<if test='examSubType != null and examSubType != \"\"'>AND q.exam_sub_type = #{examSubType}</if> " +
@@ -33,7 +34,8 @@ public interface QuestionMapper extends BaseMapper<Question> {
             "SELECT source, " +
             "MAX(exam_type) AS examType, " +
             "MAX(exam_sub_type) AS examSubType, " +
-            "COUNT(*) AS count " +
+            "COUNT(*) AS count, " +
+            "SUM(CASE WHEN can_extract = 1 THEN 1 ELSE 0 END) AS extractableCount " +
             "FROM t_question " +
             "WHERE deleted = 0 AND source IS NOT NULL AND source != '' " +
             "<if test='examType != null and examType != \"\"'>AND exam_type = #{examType}</if> " +
@@ -49,6 +51,7 @@ public interface QuestionMapper extends BaseMapper<Question> {
     @Select("SELECT exam_type AS examType, COUNT(*) AS count " +
             "FROM t_question " +
             "WHERE deleted = 0 " +
+            "AND can_extract = 1 " +   // ★ 新增：只统计可抽取的题
             "GROUP BY exam_type")
     List<ExamTypeCountVO> selectCountByExamType();
 }

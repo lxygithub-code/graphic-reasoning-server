@@ -58,6 +58,9 @@ public class Question implements Serializable {
     @TableField(select = false)
     private Integer deleted;
 
+    /** 是否可被抽取：1=可抽取，0=禁止抽取 */
+    private Integer canExtract;
+
     @Data
     public static class Option implements Serializable {
         /** 选项 key：A / B / C / D */

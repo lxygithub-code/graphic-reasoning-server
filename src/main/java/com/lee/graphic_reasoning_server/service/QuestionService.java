@@ -27,7 +27,7 @@ public interface QuestionService {
 
     void batchDelete(List<Long> ids);
 
-    /** 套卷列表（含题目数） */
+    /** 套卷列表（含题目数 + 可抽取数） */
     List<QuestionSourceStatVO> sourceStats(String examType, String examSubType, String keyword);
 
     /** 某套卷下的所有题目 */
@@ -37,4 +37,21 @@ public interface QuestionService {
     List<QuestionDetailVO.AnalysisVO> listAnalyses(Long questionId);
 
     List<ExamTypeCountVO> countByExamType();
+
+    // ==================== ★ 新增 ====================
+
+    /**
+     * 批量设置某套卷下所有题目的可抽取状态
+     * @param source 套卷值；空字符串表示"未分类"
+     * @param extractable 1=可抽取，0=禁止抽取
+     * @return 实际更新的行数
+     */
+    int updateSourceExtractable(String source, Integer extractable);
+
+    /**
+     * 设置单道题目的可抽取状态
+     * @param id 题目 ID
+     * @param extractable 1=可抽取，0=禁止抽取
+     */
+    void updateExtractable(Long id, Integer extractable);
 }

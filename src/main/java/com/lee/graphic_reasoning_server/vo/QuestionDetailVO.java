@@ -17,7 +17,8 @@ public class QuestionDetailVO {
     private String examType;
     private String examSubType;
     private String imageUrl;
-
+    /** 是否可被抽取：1=可抽取，0=禁止抽取 */
+    private Integer canExtract;
     /** 分平台解析 */
     private List<AnalysisVO> analyses;
 

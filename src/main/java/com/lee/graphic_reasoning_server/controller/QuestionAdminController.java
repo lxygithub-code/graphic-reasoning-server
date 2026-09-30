@@ -54,7 +54,7 @@ public class QuestionAdminController {
         return R.ok(questionService.detail(id));
     }
 
-    /** 套卷列表（含题目数量） */
+    /** 套卷列表（含题目数量 + 可抽取数量） */
     @GetMapping("/sources")
     public R<List<QuestionSourceStatVO>> sources(
             @RequestParam(required = false) String examType,
@@ -63,10 +63,29 @@ public class QuestionAdminController {
         return R.ok(questionService.sourceStats(examType, examSubType, keyword));
     }
 
-    /** 某套卷下的所有题目 */
+    /** 某套卷下的所有题目（VO 已含 canExtract） */
     @GetMapping("/by-source")
     public R<List<QuestionDetailVO>> bySource(
             @RequestParam(required = false, defaultValue = "") String source) {
         return R.ok(questionService.listBySource(source));
+    }
+
+    // ==================== ★ 新增：可抽取控制 ====================
+
+    /** 批量设置某套卷下所有题目的可抽取状态，返回更新条数 */
+    @PutMapping("/source/extractable")
+    public R<Integer> updateSourceExtractable(
+            @RequestParam(required = false, defaultValue = "") String source,
+            @RequestParam Integer extractable) {
+        return R.ok(questionService.updateSourceExtractable(source, extractable));
+    }
+
+    /** 设置单道题目的可抽取状态 */
+    @PutMapping("/{id}/extractable")
+    public R<Void> updateExtractable(
+            @PathVariable Long id,
+            @RequestParam Integer extractable) {
+        questionService.updateExtractable(id, extractable);
+        return R.ok();
     }
 }
