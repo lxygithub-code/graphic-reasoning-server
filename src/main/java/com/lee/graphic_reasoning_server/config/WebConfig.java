@@ -21,8 +21,7 @@ public class WebConfig implements WebMvcConfigurer {
         registry.addInterceptor(adminAuthInterceptor)
                 .addPathPatterns("/api/admin/**")
                 .excludePathPatterns(
-                        "/api/dict/**",     // ★ 字典接口放行
-                        "/api/admin/upload/**"   // 上传接口如需提前放行（可选）
+                        "/api/dict/**"     // ★ 字典接口放行
                 )
                 .order(1);
 
@@ -31,10 +30,12 @@ public class WebConfig implements WebMvcConfigurer {
                 .addPathPatterns("/api/**")
                 .excludePathPatterns(
                         "/api/auth/login",          // 小程序登录
-                        "/api/auth/admin/**",       // ★ 管理端登录/登出（用 ** 覆盖所有）
-                        "/api/admin/**",            // ★★★ 关键：排除所有管理端接口
                         "/api/dict/**",     // ★ 字典接口放行
-                        "/api/health"
+                        // ★★★ 新增：游客可访问的白名单
+                        "/api/question/random",             // 游客随机抽题（试玩）
+                        "/api/question/count-by-exam-type", // 考试类型统计
+                        "/api/practice/comment/list",        // 评论列表（只读）
+                        "/api/question/*/preview"        // ★ 新增：题目预览（游客可访问）
                 )
                 .order(2);
     }

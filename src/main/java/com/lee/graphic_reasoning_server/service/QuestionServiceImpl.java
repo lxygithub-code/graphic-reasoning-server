@@ -21,6 +21,7 @@ import com.lee.graphic_reasoning_server.vo.QuestionDetailVO;
 import com.lee.graphic_reasoning_server.vo.QuestionPracticeVO;
 import com.lee.graphic_reasoning_server.vo.QuestionSourceStatVO;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,6 +31,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class QuestionServiceImpl implements QuestionService {
 
     private final QuestionMapper questionMapper;
@@ -41,7 +43,12 @@ public class QuestionServiceImpl implements QuestionService {
     @Override
     public List<QuestionPracticeVO> randomPractice(QuestionRandomDTO dto) {
         Long userId = UserContext.get();
-        if (userId == null) throw new BizException("未登录");
+
+        // ★★★ 游客模式：不区分权重，简单随机抽题
+        if (userId == null) {
+            log.warn("未登录,Guest mode: random practice");
+            return randomForGuest(dto);
+        }
 
         int count = dto.getCount() == null ? 10 : dto.getCount();
         if (count <= 0 || count > 50) count = 10;
@@ -120,6 +127,31 @@ public class QuestionServiceImpl implements QuestionService {
                 .map(q -> {
                     QuestionPracticeVO vo = new QuestionPracticeVO();
                     BeanUtil.copyProperties(q, vo);
+                    return vo;
+                })
+                .collect(Collectors.toList());
+    }
+
+    /** ★ 游客随机抽题：不区分权重、不查历史 */
+    private List<QuestionPracticeVO> randomForGuest(QuestionRandomDTO dto) {
+        int count = dto.getCount() == null ? 10 : dto.getCount();
+        if (count <= 0 || count > 50) count = 10;
+
+        List<Long> ids = questionMapper.randomGuestIds(
+                dto.getCategory(), dto.getExamType(), dto.getExamSubType(), count);
+        if (ids.isEmpty()) return Collections.emptyList();
+
+        List<Question> list = questionMapper.selectByIds(ids);
+        Map<Long, Question> map = list.stream()
+                .collect(Collectors.toMap(Question::getId, Function.identity()));
+
+        return ids.stream()
+                .map(map::get)
+                .filter(Objects::nonNull)
+                .map(q -> {
+                    QuestionPracticeVO vo = new QuestionPracticeVO();
+                    BeanUtil.copyProperties(q, vo);
+                    // userLastCorrect 保持 null，游客无历史记录
                     return vo;
                 })
                 .collect(Collectors.toList());
@@ -321,5 +353,15 @@ public class QuestionServiceImpl implements QuestionService {
         q.setId(id);
         q.setCanExtract(extractable);
         questionMapper.updateById(q);
+    }
+
+    @Override
+    public QuestionPracticeVO preview(Long id) {
+        Question q = questionMapper.selectById(id);
+        if (q == null) throw new BizException("题目不存在");
+        QuestionPracticeVO vo = new QuestionPracticeVO();
+        BeanUtil.copyProperties(q, vo);
+        // QuestionPracticeVO 本身不含 correctOption / analysis，天然安全
+        return vo;
     }
 }

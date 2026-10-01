@@ -13,6 +13,21 @@ import java.util.List;
 @Mapper
 public interface QuestionMapper extends BaseMapper<Question> {
 
+    /** 游客随机抽题（不查做题历史，简单随机） */
+    @Select("<script>" +
+            "SELECT q.id FROM t_question q " +
+            "WHERE q.deleted = 0 AND q.can_extract = 1 " +
+            "<if test='category != null and category != \"\"'>AND q.category = #{category}</if> " +
+            "<if test='examType != null and examType != \"\"'>AND q.exam_type = #{examType}</if> " +
+            "<if test='examSubType != null and examSubType != \"\"'>AND q.exam_sub_type = #{examSubType}</if> " +
+            "ORDER BY RAND() LIMIT #{count}" +
+            "</script>")
+    List<Long> randomGuestIds(@Param("category") String category,
+                              @Param("examType") String examType,
+                              @Param("examSubType") String examSubType,
+                              @Param("count") int count);
+
+
     @Select("<script>" +
             "SELECT q.id FROM t_question q " +
             "WHERE q.deleted = 0 " +

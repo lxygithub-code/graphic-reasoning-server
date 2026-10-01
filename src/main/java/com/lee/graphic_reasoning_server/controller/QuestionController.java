@@ -35,4 +35,10 @@ public class QuestionController {
     public R<List<ExamTypeCountVO>> countByExamType() {
         return R.ok(questionService.countByExamType());
     }
+
+    /** 题目预览（题面，不含答案和解析，游客可访问） */
+    @GetMapping("/{id}/preview")
+    public R<QuestionPracticeVO> preview(@PathVariable Long id) {
+        return R.ok(questionService.preview(id));
+    }
 }

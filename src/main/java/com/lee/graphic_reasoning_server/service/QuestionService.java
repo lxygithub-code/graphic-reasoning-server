@@ -54,4 +54,7 @@ public interface QuestionService {
      * @param extractable 1=可抽取，0=禁止抽取
      */
     void updateExtractable(Long id, Integer extractable);
+
+    /** 题目预览：只返回题面，不含答案和解析 */
+    QuestionPracticeVO preview(Long id);
 }
