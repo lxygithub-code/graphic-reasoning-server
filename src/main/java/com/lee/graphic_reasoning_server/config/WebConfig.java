@@ -31,6 +31,8 @@ public class WebConfig implements WebMvcConfigurer {
                 .excludePathPatterns(
                         "/api/auth/login",          // 小程序登录
                         "/api/dict/**",     // ★ 字典接口放行
+                        "/api/auth/admin/**",     // ★ 管理端登录放行
+                        "/api/admin/**",
                         // ★★★ 新增：游客可访问的白名单
                         "/api/question/random",             // 游客随机抽题（试玩）
                         "/api/question/count-by-exam-type", // 考试类型统计
