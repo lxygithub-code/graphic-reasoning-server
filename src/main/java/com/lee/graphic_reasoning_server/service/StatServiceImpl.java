@@ -168,7 +168,8 @@ public class StatServiceImpl implements StatService {
                                 w.likeRight(Question::getCategory, l1.getDictLabel() + "/")
                                         .or()
                                         .eq(Question::getCategory, l1.getDictLabel());
-                            }));
+                            })
+                            .and(w -> w.eq(Question::getCanExtract, 1)));
 
             Map<String, Object> item = new HashMap<>();
             item.put("name", l1.getDictLabel());
@@ -179,7 +180,8 @@ public class StatServiceImpl implements StatService {
         // 未分类
         Long uncategorized = questionMapper.selectCount(
                 new LambdaQueryWrapper<Question>()
-                        .and(w -> w.isNull(Question::getCategory).or().eq(Question::getCategory, "")));
+                        .and(w -> w.isNull(Question::getCategory).or().eq(Question::getCategory, ""))
+                        .and(w -> w.eq(Question::getCanExtract, 1)));
         if (uncategorized > 0) {
             Map<String, Object> item = new HashMap<>();
             item.put("name", "未分类");
