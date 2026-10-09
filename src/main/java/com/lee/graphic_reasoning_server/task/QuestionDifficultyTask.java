@@ -22,14 +22,17 @@ public class QuestionDifficultyTask {
     private final PracticeDetailMapper detailMapper;
     private final QuestionMapper questionMapper;
 
-    /** ★ 触发阈值：累计作答次数达到这个数才评估 */
-    private static final int MIN_ANSWER_COUNT = 20;
+    /**
+     * ★ 触发阈值：累计作答次数达到这个数才评估
+     */
+    private static final int MIN_ANSWER_COUNT = 10;
 
     /**
      * 每天 0 点整执行
      * cron 格式：秒 分 时 日 月 周
      */
     @Scheduled(cron = "0 0 0 * * ?")
+    @Transactional(rollbackFor = Exception.class)
     public void scheduledRefresh() {
         log.info("[难度刷新] 定时任务开始");
         try {
@@ -43,7 +46,6 @@ public class QuestionDifficultyTask {
     /**
      * 真正的刷新逻辑（抽出来方便手动触发 / 单测）
      */
-    @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> doRefresh() {
         // 1. 统计：只返回累计作答 >= 20 次的题目
         List<QuestionDifficultyStatVO> stats =
@@ -55,7 +57,10 @@ public class QuestionDifficultyTask {
         for (QuestionDifficultyStatVO s : stats) {
             Long total = s.getTotalCount();
             Long correct = s.getCorrectCount();
-            if (total == null || total == 0) { skipped++; continue; }
+            if (total == null || total == 0) {
+                skipped++;
+                continue;
+            }
 
             // 2. 计算正确率（百分比 0-100）
             double accuracy = correct * 100.0 / total;
@@ -68,8 +73,11 @@ public class QuestionDifficultyTask {
             update.setId(s.getQuestionId());
             update.setDifficulty(level);
             int rows = questionMapper.updateById(update);
-            if (rows > 0) updated++;
-            else skipped++;
+            if (rows > 0) {
+                updated++;
+            } else {
+                skipped++;
+            }
         }
 
         Map<String, Object> result = new HashMap<>();
@@ -89,10 +97,18 @@ public class QuestionDifficultyTask {
      * >80%  → 1 星（最容易）
      */
     private int computeLevel(double accuracy) {
-        if (accuracy <= 20) return 5;
-        if (accuracy <= 40) return 4;
-        if (accuracy <= 60) return 3;
-        if (accuracy <= 80) return 2;
+        if (accuracy <= 20) {
+            return 5;
+        }
+        if (accuracy <= 40) {
+            return 4;
+        }
+        if (accuracy <= 60) {
+            return 3;
+        }
+        if (accuracy <= 80) {
+            return 2;
+        }
         return 1;
     }
 }

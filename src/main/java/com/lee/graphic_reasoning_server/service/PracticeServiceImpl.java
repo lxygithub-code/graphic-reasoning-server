@@ -10,14 +10,12 @@ import com.lee.graphic_reasoning_server.common.UserContext;
 import com.lee.graphic_reasoning_server.dto.CommentSaveDTO;
 import com.lee.graphic_reasoning_server.dto.PracticeSingleDTO;
 import com.lee.graphic_reasoning_server.dto.PracticeSubmitDTO;
-import com.lee.graphic_reasoning_server.po.*;
 import com.lee.graphic_reasoning_server.mapper.*;
-import com.lee.graphic_reasoning_server.service.PracticeService;
+import com.lee.graphic_reasoning_server.po.*;
 import com.lee.graphic_reasoning_server.util.ContentFilter;
 import com.lee.graphic_reasoning_server.vo.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,7 +29,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -143,7 +140,7 @@ public class PracticeServiceImpl implements PracticeService {
 
         // 2. 批量查题目（一次查询）
         List<Long> qIds = items.stream().map(PracticeSubmitDTO.Item::getQuestionId).collect(Collectors.toList());
-        List<Question> questions = questionMapper.selectBatchIds(qIds);
+        List<Question> questions = questionMapper.selectByIds(qIds);
         Map<Long, Question> qMap = questions.stream()
                 .collect(Collectors.toMap(Question::getId, Function.identity()));
 
@@ -154,11 +151,15 @@ public class PracticeServiceImpl implements PracticeService {
 
         for (PracticeSubmitDTO.Item it : items) {
             Question q = qMap.get(it.getQuestionId());
-            if (q == null) continue;
+            if (q == null) {
+                continue;
+            }
 
             boolean isCorrect = StrUtil.isNotBlank(it.getUserAnswer())
                     && it.getUserAnswer().equalsIgnoreCase(q.getCorrectOption());
-            if (isCorrect) correctCount++;
+            if (isCorrect) {
+                correctCount++;
+            }
             totalDuration += (it.getTimeSpent() == null ? 0 : it.getTimeSpent());
 
             PracticeDetail d = new PracticeDetail();
