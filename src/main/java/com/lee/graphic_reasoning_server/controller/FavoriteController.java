@@ -15,6 +15,7 @@ import com.lee.graphic_reasoning_server.mapper.QuestionMapper;
 import com.lee.graphic_reasoning_server.po.Favorite;
 import com.lee.graphic_reasoning_server.po.Question;
 import com.lee.graphic_reasoning_server.po.QuestionAnalysis;
+import com.lee.graphic_reasoning_server.util.DictTranslator;
 import com.lee.graphic_reasoning_server.vo.QuestionDetailVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -33,6 +34,7 @@ public class FavoriteController {
     private final FavoriteMapper favoriteMapper;
     private final QuestionMapper questionMapper;
     private final QuestionAnalysisMapper questionAnalysisMapper;
+    private final DictTranslator dictTranslator;
 
     /**
      * 收藏/取消收藏
@@ -109,6 +111,17 @@ public class FavoriteController {
                 }
             }
         }
+        // 批量翻译
+        if (!records.isEmpty()) {
+            List<String> cats = records.stream()
+                    .map(QuestionDetailVO::getCategory)
+                    .filter(StrUtil::isNotBlank)
+                    .distinct()
+                    .collect(Collectors.toList());
+            Map<String, String> catMap = dictTranslator.batchValueToLabelPath(cats);
+            records.forEach(vo -> vo.setCategoryLabel(
+                    catMap.getOrDefault(vo.getCategory(), vo.getCategory())));
+        }
         return R.ok(PageVO.of(page.getTotal(), page.getCurrent(), page.getSize(), records));
     }
 
@@ -116,17 +129,23 @@ public class FavoriteController {
     @GetMapping("/{questionId}/detail")
     public R<QuestionDetailVO> detail(@PathVariable Long questionId) {
         Long userId = UserContext.get();
-        if (userId == null) throw new BizException("未登录");
+        if (userId == null) {
+            throw new BizException("未登录");
+        }
 
         // 校验是否已收藏（可选）
         Long count = favoriteMapper.selectCount(
                 new LambdaQueryWrapper<Favorite>()
                         .eq(Favorite::getUserId, userId)
                         .eq(Favorite::getQuestionId, questionId));
-        if (count == null || count == 0) throw new BizException("该题目未收藏");
+        if (count == null || count == 0) {
+            throw new BizException("该题目未收藏");
+        }
 
         Question q = questionMapper.selectById(questionId);
-        if (q == null) throw new BizException("题目不存在");
+        if (q == null) {
+            throw new BizException("题目不存在");
+        }
 
         QuestionDetailVO vo = new QuestionDetailVO();
         BeanUtil.copyProperties(q, vo);
@@ -144,7 +163,7 @@ public class FavoriteController {
             av.setContent(a.getContent());
             return av;
         }).collect(Collectors.toList()));
-
+        vo.setCategoryLabel(dictTranslator.valuePathToLabelPath(vo.getCategory()));
         return R.ok(vo);
     }
 }

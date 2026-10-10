@@ -6,6 +6,7 @@ import lombok.Data;
 public class PracticeRecordVO {
     private Long id;
     private String category;
+    private String categoryLabel;
     private Integer totalCount;
     private Integer correctCount;
     private Double accuracy;

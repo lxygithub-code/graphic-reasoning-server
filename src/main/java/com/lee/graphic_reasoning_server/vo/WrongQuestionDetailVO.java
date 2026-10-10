@@ -15,6 +15,7 @@ public class WrongQuestionDetailVO {
     private List<Question.Option> options;
     private String correctOption;
     private String category;
+    private String categoryLabel;
     private String examType;
     private String source;
     private Integer difficulty;

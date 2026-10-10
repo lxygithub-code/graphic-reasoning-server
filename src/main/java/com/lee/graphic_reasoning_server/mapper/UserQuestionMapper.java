@@ -33,7 +33,7 @@ public interface UserQuestionMapper extends BaseMapper<UserQuestion> {
             "WHERE q.deleted = 0 " +
             "AND q.can_extract = 1 " +   // ★ 新增：只抽可抽取的题
             "AND uq.user_id = #{userId} AND uq.is_correct = 1 " +
-            "<if test='category != null and category != \"\"'>AND q.category = #{category}</if> " +
+            "<if test='category != null and category != \"\"'> AND (category = #{category} OR category LIKE CONCAT(#{category}, '/%'))</if>" +
             "<if test='examType != null and examType != \"\"'>AND q.exam_type = #{examType}</if> " +
             "<if test='examSubType != null and examSubType != \"\"'>AND q.exam_sub_type = #{examSubType}</if> " +
             "ORDER BY RAND() LIMIT #{count}" +
@@ -51,7 +51,7 @@ public interface UserQuestionMapper extends BaseMapper<UserQuestion> {
             "WHERE q.deleted = 0 " +
             "AND q.can_extract = 1 " +   // ★ 新增：只抽可抽取的题
             "AND uq.user_id = #{userId} AND uq.is_correct = 0 " +
-            "<if test='category != null and category != \"\"'>AND q.category = #{category}</if> " +
+            "<if test='category != null and category != \"\"'> AND (category = #{category} OR category LIKE CONCAT(#{category}, '/%'))</if>" +
             "<if test='examType != null and examType != \"\"'>AND q.exam_type = #{examType}</if> " +
             "<if test='examSubType != null and examSubType != \"\"'>AND q.exam_sub_type = #{examSubType}</if> " +
             "ORDER BY RAND() LIMIT #{count}" +

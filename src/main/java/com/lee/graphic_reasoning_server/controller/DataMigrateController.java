@@ -4,6 +4,8 @@ package com.lee.graphic_reasoning_server.controller;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.lee.graphic_reasoning_server.common.R;
+import com.lee.graphic_reasoning_server.mapper.DictMapper;
+import com.lee.graphic_reasoning_server.po.Dict;
 import com.lee.graphic_reasoning_server.po.Question;
 import com.lee.graphic_reasoning_server.po.QuestionAnalysis;
 import com.lee.graphic_reasoning_server.po.User;
@@ -19,9 +21,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.File;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Slf4j
 @RestController
@@ -33,6 +34,7 @@ public class DataMigrateController {
     private final QuestionMapper questionMapper;
     private final QuestionAnalysisMapper analysisMapper;
     private final UserMapper userMapper;
+    private final DictMapper dictMapper;
 
     /** 本地旧图片根目录（跟原 file.upload.path 一致） */
     @Value("${file.upload.path:/opt/upload/}")
@@ -128,6 +130,87 @@ public class DataMigrateController {
             log.error("迁移失败: {}", localUrl, e);
             cache.put(localUrl, null);
             return null;
+        }
+    }
+
+
+    @PostMapping("/category-label-to-value")
+    public R<Map<String, Object>> migrateCategoryToValue() {
+        return R.ok(doMigrateCategoryToValue());
+    }
+
+    private Map<String, Object> doMigrateCategoryToValue() {
+        // 1. 拉所有 question_category 字典（含 status=1）
+        List<Dict> all = dictMapper.selectList(
+                new LambdaQueryWrapper<Dict>()
+                        .eq(Dict::getDictType, "question_category")
+                        .eq(Dict::getStatus, 1));
+        // 按 parentId 分组
+        Map<Long, List<Dict>> byParent = all.stream()
+                .collect(Collectors.groupingBy(Dict::getParentId));
+
+        // 2. 递归构建 label路径 → value路径 的映射
+        Map<String, String> labelToValue = new HashMap<>();
+        buildPathMap(byParent, 0L, "", "", labelToValue);
+
+        // 3. 找出所有需要迁移的题目
+        List<Question> questions = questionMapper.selectList(
+                new LambdaQueryWrapper<Question>()
+                        .isNotNull(Question::getCategory)
+                        .ne(Question::getCategory, ""));
+
+        int migrated = 0, skipped = 0;
+        List<String> failed = new ArrayList<>();
+
+        for (Question q : questions) {
+            String oldPath = q.getCategory();
+            // 已经是 value 路径的（包含下划线）跳过
+            if (oldPath.matches("^[a-z_]+(/[a-z_]+)*$")) {
+                skipped++;
+                continue;
+            }
+            String newPath = labelToValue.get(oldPath);
+            if (newPath == null) {
+                failed.add(oldPath);
+                continue;
+            }
+            Question update = new Question();
+            update.setId(q.getId());
+            update.setCategory(newPath);
+            questionMapper.updateById(update);
+            migrated++;
+        }
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("migrated", migrated);
+        res.put("skipped", skipped);
+        res.put("failedCount", failed.size());
+        res.put("failedPaths", failed);   // 返回没匹配上的，人工核对
+        return res;
+    }
+
+    /**
+     * 递归构建 label 路径 → value 路径
+     * @param byParent   parentId → children
+     * @param parentId   当前父节点 id
+     * @param labelPrefix 父级 label 路径（如 "黑白块/一、黑白球..."）
+     * @param valuePrefix 父级 value 路径（如 "black_white_block/bw_ball"）
+     */
+    private void buildPathMap(Map<Long, List<Dict>> byParent, Long parentId,
+                              String labelPrefix, String valuePrefix,
+                              Map<String, String> result) {
+        List<Dict> children = byParent.getOrDefault(parentId, Collections.emptyList());
+        for (Dict d : children) {
+            String curLabelPath = StrUtil.isBlank(labelPrefix)
+                    ? d.getDictLabel()
+                    : labelPrefix + "/" + d.getDictLabel();
+            String curValuePath = StrUtil.isBlank(valuePrefix)
+                    ? d.getDictValue()
+                    : valuePrefix + "/" + d.getDictValue();
+
+            result.put(curLabelPath, curValuePath);
+            // 递归子节点
+            buildPathMap(byParent, d.getId(), curLabelPath, curValuePath, result);
         }
     }
 }

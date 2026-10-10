@@ -3,6 +3,7 @@ package com.lee.graphic_reasoning_server.controller;
 import com.lee.graphic_reasoning_server.common.R;
 import com.lee.graphic_reasoning_server.dto.QuestionRandomDTO;
 import com.lee.graphic_reasoning_server.service.QuestionService;
+import com.lee.graphic_reasoning_server.vo.CategoryTreeVO;
 import com.lee.graphic_reasoning_server.vo.ExamTypeCountVO;
 import com.lee.graphic_reasoning_server.vo.QuestionDetailVO;
 import com.lee.graphic_reasoning_server.vo.QuestionPracticeVO;
@@ -40,5 +41,11 @@ public class QuestionController {
     @GetMapping("/{id}/preview")
     public R<QuestionPracticeVO> preview(@PathVariable Long id) {
         return R.ok(questionService.preview(id));
+    }
+
+    /** ★ 分类树 + 每个分类（含子类）的题目数 */
+    @GetMapping("/category-tree")
+    public R<List<CategoryTreeVO>> categoryTree() {
+        return R.ok(questionService.categoryTreeWithCount());
     }
 }

@@ -11,6 +11,7 @@ import com.lee.graphic_reasoning_server.dto.DictQueryDTO;
 import com.lee.graphic_reasoning_server.dto.DictSaveDTO;
 import com.lee.graphic_reasoning_server.mapper.DictMapper;
 import com.lee.graphic_reasoning_server.po.Dict;
+import com.lee.graphic_reasoning_server.util.DictTranslator;
 import com.lee.graphic_reasoning_server.vo.DictTypeVO;
 import com.lee.graphic_reasoning_server.vo.DictVO;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +28,7 @@ import java.util.stream.Collectors;
 public class DictServiceImpl implements DictService {
 
     private final DictMapper dictMapper;
+    private final DictTranslator dictTranslator;
 
     @Override
     public List<DictVO> listByType(String dictType, Integer level) {
@@ -137,6 +139,7 @@ public class DictServiceImpl implements DictService {
             }
         }
         dictMapper.insert(d);
+        dictTranslator.refresh();
         return d.getId();
     }
 
@@ -172,6 +175,7 @@ public class DictServiceImpl implements DictService {
         }
 
         dictMapper.updateById(d);
+        dictTranslator.refresh();
     }
 
     @Override
@@ -179,6 +183,7 @@ public class DictServiceImpl implements DictService {
     public void delete(Long id) {
         // 递归删除所有子节点
         deleteRecursive(id);
+        dictTranslator.refresh();
     }
 
     private void deleteRecursive(Long id) {

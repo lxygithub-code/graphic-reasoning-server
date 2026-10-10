@@ -9,11 +9,39 @@ import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 
 import java.util.List;
+import java.util.Map;
 
 @Mapper
 public interface QuestionMapper extends BaseMapper<Question> {
 
-    /** 游客随机抽题（不查做题历史，简单随机） */
+    /**
+     * ★ 游客纯随机抽题：不做用户历史分层
+     */
+    @Select("""
+                <script>
+                SELECT id FROM t_question
+                WHERE deleted = 0 AND can_extract = 1 
+                <if test="category != null and category != ''">
+                    AND (category = #{category} OR category LIKE CONCAT(#{category}, '/%'))
+                </if>
+                <if test="examType != null and examType != '' and examType != 'custom'">
+                    AND exam_type = #{examType}
+                </if>
+                <if test="examSubType != null and examSubType != ''">
+                    AND exam_sub_type = #{examSubType}
+                </if>
+                ORDER BY RAND()
+                LIMIT #{count}
+                </script>
+            """)
+    List<Long> randomPureIds(@Param("category") String category,
+                             @Param("examType") String examType,
+                             @Param("examSubType") String examSubType,
+                             @Param("count") int count);
+
+    /**
+     * 游客随机抽题（不查做题历史，简单随机）
+     */
     @Select("<script>" +
             "SELECT q.id FROM t_question q " +
             "WHERE q.deleted = 0 AND q.can_extract = 1 " +
@@ -32,7 +60,7 @@ public interface QuestionMapper extends BaseMapper<Question> {
             "SELECT q.id FROM t_question q " +
             "WHERE q.deleted = 0 " +
             "AND q.can_extract = 1 " +   // ★ 新增：只抽可抽取的题
-            "<if test='category != null and category != \"\"'>AND q.category = #{category}</if> " +
+            "<if test='category != null and category != \"\"'> AND (category = #{category} OR category LIKE CONCAT(#{category}, '/%'))</if>" +
             "<if test='examType != null and examType != \"\"'>AND q.exam_type = #{examType}</if> " +
             "<if test='examSubType != null and examSubType != \"\"'>AND q.exam_sub_type = #{examSubType}</if> " +
             "AND NOT EXISTS (SELECT 1 FROM t_user_question uq " +
@@ -69,4 +97,17 @@ public interface QuestionMapper extends BaseMapper<Question> {
             "AND can_extract = 1 " +   // ★ 新增：只统计可抽取的题
             "GROUP BY exam_type")
     List<ExamTypeCountVO> selectCountByExamType();
+
+    /**
+     * 按 category 分组统计题目数
+     * 注意：手写 SQL 时 @TableLogic 不生效，需显式 deleted=0
+     */
+    @Select("""
+                SELECT category AS category, COUNT(*) AS cnt
+                FROM t_question
+                WHERE deleted = 0
+                  AND category IS NOT NULL AND category <> ''
+                GROUP BY category
+            """)
+    List<Map<String, Object>> selectCategoryCountGroupBy();
 }

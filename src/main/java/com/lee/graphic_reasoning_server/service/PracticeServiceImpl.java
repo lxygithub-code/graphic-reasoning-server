@@ -3,6 +3,7 @@ package com.lee.graphic_reasoning_server.service;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.toolkit.CollectionUtils;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lee.graphic_reasoning_server.common.BizException;
 import com.lee.graphic_reasoning_server.common.PageVO;
@@ -13,6 +14,7 @@ import com.lee.graphic_reasoning_server.dto.PracticeSubmitDTO;
 import com.lee.graphic_reasoning_server.mapper.*;
 import com.lee.graphic_reasoning_server.po.*;
 import com.lee.graphic_reasoning_server.util.ContentFilter;
+import com.lee.graphic_reasoning_server.util.DictTranslator;
 import com.lee.graphic_reasoning_server.vo.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -46,57 +48,64 @@ public class PracticeServiceImpl implements PracticeService {
     private final UserQuestionMapper userQuestionMapper;
     private final QuestionService questionService;
     private final QuestionAnalysisMapper analysisMapper;
-
+    private final DictTranslator dictTranslator;
 
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     // ==================== 背题模式：单题核对 ====================
     @Override
     public PracticeSingleVO submitSingle(PracticeSingleDTO dto) {
+        // ★ 允许游客
         Long userId = UserContext.get();
-        if (userId == null) throw new BizException("未登录");
 
         Question q = questionMapper.selectById(dto.getQuestionId());
-        if (q == null) throw new BizException("题目不存在");
+        if (q == null) {
+            throw new BizException("题目不存在");
+        }
 
         boolean isCorrect = StrUtil.isNotBlank(dto.getUserAnswer())
                 && dto.getUserAnswer().equalsIgnoreCase(q.getCorrectOption());
 
-        UserQuestion uq = userQuestionMapper.selectOne(
-                new LambdaQueryWrapper<UserQuestion>()
-                        .eq(UserQuestion::getUserId, userId)
-                        .eq(UserQuestion::getQuestionId, q.getId()));
-        if (uq == null) {
-            uq = new UserQuestion();
-            uq.setUserId(userId);
-            uq.setQuestionId(q.getId());
-            uq.setIsCorrect(isCorrect ? 1 : 0);
-            uq.setAnswerCount(1);
-            uq.setLastAnswerTime(LocalDateTime.now());
-            userQuestionMapper.insert(uq);
-        } else {
-            uq.setIsCorrect(isCorrect ? 1 : 0);
-            uq.setAnswerCount(uq.getAnswerCount() + 1);
-            uq.setLastAnswerTime(LocalDateTime.now());
-            userQuestionMapper.updateById(uq);
+        // ★ 只有登录用户才持久化学习记录
+        if (userId != null) {
+            UserQuestion uq = userQuestionMapper.selectOne(
+                    new LambdaQueryWrapper<UserQuestion>()
+                            .eq(UserQuestion::getUserId, userId)
+                            .eq(UserQuestion::getQuestionId, q.getId()));
+            if (uq == null) {
+                uq = new UserQuestion();
+                uq.setUserId(userId);
+                uq.setQuestionId(q.getId());
+                uq.setIsCorrect(isCorrect ? 1 : 0);
+                uq.setAnswerCount(1);
+                uq.setLastAnswerTime(LocalDateTime.now());
+                userQuestionMapper.insert(uq);
+            } else {
+                uq.setIsCorrect(isCorrect ? 1 : 0);
+                uq.setAnswerCount(uq.getAnswerCount() + 1);
+                uq.setLastAnswerTime(LocalDateTime.now());
+                userQuestionMapper.updateById(uq);
+            }
+
+            if (!isCorrect && StrUtil.isNotBlank(dto.getUserAnswer())) {
+                upsertWrong(userId, q.getId());
+            }
         }
 
-        // 答错写错题本
-        if (!isCorrect && StrUtil.isNotBlank(dto.getUserAnswer())) {
-            upsertWrong(userId, q.getId());
-        }
-
-        // ★ 查当前用户的评论权限
-        User user = userMapper.selectById(userId);
-        Integer canComment = (user != null && user.getCanComment() != null)
-                ? user.getCanComment() : 1;
-
+        // 组装返回
         PracticeSingleVO vo = new PracticeSingleVO();
         vo.setIsCorrect(isCorrect);
         vo.setCorrectOption(q.getCorrectOption());
-        vo.setAnalyses(loadAnalyses(q.getId()));
-        vo.setComments(loadComments(q.getId()));
         vo.setAnalyses(questionService.listAnalyses(q.getId()));
+        vo.setComments(loadComments(q.getId()));
+
+        // ★ 游客默认禁止评论（前端会隐藏输入框）
+        int canComment = 0;
+        if (userId != null) {
+            User user = userMapper.selectById(userId);
+            canComment = (user != null && user.getCanComment() != null)
+                    ? user.getCanComment() : 1;
+        }
         vo.setCanComment(canComment);
         return vo;
     }
@@ -266,11 +275,17 @@ public class PracticeServiceImpl implements PracticeService {
     @Override
     public PracticeRecordDetailVO getRecordDetail(Long recordId) {
         Long userId = UserContext.get();
-        if (userId == null) throw new BizException("未登录");
+        if (userId == null) {
+            throw new BizException("未登录");
+        }
 
         PracticeRecord record = recordMapper.selectById(recordId);
-        if (record == null) throw new BizException("练习记录不存在");
-        if (!record.getUserId().equals(userId)) throw new BizException("无权查看该记录");
+        if (record == null) {
+            throw new BizException("练习记录不存在");
+        }
+        if (!record.getUserId().equals(userId)) {
+            throw new BizException("无权查看该记录");
+        }
 
         PracticeRecordDetailVO vo = new PracticeRecordDetailVO();
         vo.setRecordId(record.getId());
@@ -279,6 +294,8 @@ public class PracticeServiceImpl implements PracticeService {
         vo.setCorrectCount(record.getCorrectCount());
         vo.setAccuracy(record.getAccuracy() == null ? 0.0 : record.getAccuracy().doubleValue());
         vo.setTotalDuration(record.getTotalDuration());
+        vo.setCategory(record.getCategory());
+        vo.setCategoryLabel(dictTranslator.valuePathToLabelPath(record.getCategory()));
         if (record.getCreateTime() != null) {
             vo.setCreateTime(record.getCreateTime()
                     .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
@@ -298,7 +315,7 @@ public class PracticeServiceImpl implements PracticeService {
                 .map(PracticeDetail::getQuestionId)
                 .distinct()
                 .collect(Collectors.toList());
-        List<Question> questions = questionMapper.selectBatchIds(qIds);
+        List<Question> questions = questionMapper.selectByIds(qIds);
         Map<Long, Question> qMap = questions.stream()
                 .collect(Collectors.toMap(Question::getId, Function.identity()));
 
@@ -323,6 +340,16 @@ public class PracticeServiceImpl implements PracticeService {
                 item.setExamSubType(q.getExamSubType());
             }
             items.add(item);
+        }
+        if(CollectionUtils.isNotEmpty(items)){
+            List<String> cats = items.stream()
+                    .map(PracticeDetailItemVO::getCategory)
+                    .filter(StrUtil::isNotBlank)
+                    .distinct()
+                    .collect(Collectors.toList());
+            Map<String, String> catMap = dictTranslator.batchValueToLabelPath(cats);
+            items.forEach(item -> item.setCategoryLabel(
+                    catMap.getOrDefault(item.getCategory(), item.getCategory())));
         }
         vo.setItems(items);
         return vo;
@@ -465,6 +492,17 @@ public class PracticeServiceImpl implements PracticeService {
                 }
             }
         }
+        // 批量翻译
+        if (!records.isEmpty()) {
+            List<String> cats = records.stream()
+                    .map(QuestionDetailVO::getCategory)
+                    .filter(StrUtil::isNotBlank)
+                    .distinct()
+                    .collect(Collectors.toList());
+            Map<String, String> catMap = dictTranslator.batchValueToLabelPath(cats);
+            records.forEach(vo -> vo.setCategoryLabel(
+                    catMap.getOrDefault(vo.getCategory(), vo.getCategory())));
+        }
         return PageVO.of(page.getTotal(), page.getCurrent(), page.getSize(), records);
     }
 
@@ -481,11 +519,15 @@ public class PracticeServiceImpl implements PracticeService {
     @Override
     public WrongQuestionDetailVO getWrongDetail(Long questionId) {
         Long userId = UserContext.get();
-        if (userId == null) throw new BizException("未登录");
+        if (userId == null) {
+            throw new BizException("未登录");
+        }
 
         // 1. 查题目
         Question q = questionMapper.selectById(questionId);
-        if (q == null) throw new BizException("题目不存在");
+        if (q == null) {
+            throw new BizException("题目不存在");
+        }
 
         // 2. 查错题记录
         WrongQuestion wrong = wrongMapper.selectOne(
@@ -530,7 +572,7 @@ public class PracticeServiceImpl implements PracticeService {
                 vo.setAnswerTime(lastDetail.getCreateTime().format(FMT));
             }
         }
-
+        vo.setCategoryLabel(dictTranslator.valuePathToLabelPath(vo.getCategory()));
         return vo;
     }
 }

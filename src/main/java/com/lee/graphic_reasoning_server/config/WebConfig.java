@@ -11,33 +11,25 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @RequiredArgsConstructor
 public class WebConfig implements WebMvcConfigurer {
 
-    private final AuthInterceptor authInterceptor;         // 小程序端
-    private final AdminAuthInterceptor adminAuthInterceptor; // 后台管理端
+    private final AuthInterceptor authInterceptor;
+    private final AdminAuthInterceptor adminAuthInterceptor;
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
 
-        // ============ 1. 管理端拦截器（先注册，优先级高） ============
+        // 管理端（独立体系，跟小程序端不共用 UserContext）
         registry.addInterceptor(adminAuthInterceptor)
                 .addPathPatterns("/api/admin/**")
-                .excludePathPatterns(
-                        "/api/dict/**"     // ★ 字典接口放行
-                )
+                .excludePathPatterns("/api/dict/**")   // 字典接口两端都用，放行
                 .order(1);
 
-        // ============ 2. 小程序端拦截器 ============
+        // 小程序端：全量进拦截器，内部再判定是否强制登录
         registry.addInterceptor(authInterceptor)
                 .addPathPatterns("/api/**")
                 .excludePathPatterns(
-                        "/api/auth/login",          // 小程序登录
-                        "/api/dict/**",     // ★ 字典接口放行
-                        "/api/auth/admin/**",     // ★ 管理端登录放行
-                        "/api/admin/**",
-                        // ★★★ 新增：游客可访问的白名单
-                        "/api/question/random",             // 游客随机抽题（试玩）
-                        "/api/question/count-by-exam-type", // 考试类型统计
-                        "/api/practice/comment/list",        // 评论列表（只读）
-                        "/api/question/*/preview"        // ★ 新增：题目预览（游客可访问）
+                        "/api/auth/login",       // 登录接口本身
+                        "/api/auth/admin/**",    // 管理端登录
+                        "/api/admin/**"          // 管理端由上面那个拦截器处理
                 )
                 .order(2);
     }

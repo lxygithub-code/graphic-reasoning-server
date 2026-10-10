@@ -4,10 +4,7 @@ import com.lee.graphic_reasoning_server.common.PageVO;
 import com.lee.graphic_reasoning_server.dto.QuestionQueryDTO;
 import com.lee.graphic_reasoning_server.dto.QuestionRandomDTO;
 import com.lee.graphic_reasoning_server.dto.QuestionSaveDTO;
-import com.lee.graphic_reasoning_server.vo.ExamTypeCountVO;
-import com.lee.graphic_reasoning_server.vo.QuestionDetailVO;
-import com.lee.graphic_reasoning_server.vo.QuestionPracticeVO;
-import com.lee.graphic_reasoning_server.vo.QuestionSourceStatVO;
+import com.lee.graphic_reasoning_server.vo.*;
 
 import java.util.List;
 
@@ -57,4 +54,6 @@ public interface QuestionService {
 
     /** 题目预览：只返回题面，不含答案和解析 */
     QuestionPracticeVO preview(Long id);
+
+    List<CategoryTreeVO> categoryTreeWithCount();
 }

@@ -12,6 +12,7 @@ public class QuestionPracticeVO {
     private List<Question.Option> options;
     private String source;
     private String category;
+    private String categoryLabel;
     private Integer difficulty;
     private String examType;
     private String examSubType;

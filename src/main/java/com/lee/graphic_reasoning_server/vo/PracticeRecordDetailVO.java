@@ -13,5 +13,7 @@ public class PracticeRecordDetailVO {
     private Double accuracy;
     private Integer totalDuration;
     private String createTime;
+    private String category;
+    private String categoryLabel;
     private List<PracticeDetailItemVO> items;
 }

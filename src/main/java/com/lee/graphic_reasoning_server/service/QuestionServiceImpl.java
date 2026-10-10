@@ -1,6 +1,7 @@
 package com.lee.graphic_reasoning_server.service;
 
 import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
@@ -16,14 +17,14 @@ import com.lee.graphic_reasoning_server.mapper.QuestionMapper;
 import com.lee.graphic_reasoning_server.mapper.UserQuestionMapper;
 import com.lee.graphic_reasoning_server.po.Question;
 import com.lee.graphic_reasoning_server.po.QuestionAnalysis;
-import com.lee.graphic_reasoning_server.vo.ExamTypeCountVO;
-import com.lee.graphic_reasoning_server.vo.QuestionDetailVO;
-import com.lee.graphic_reasoning_server.vo.QuestionPracticeVO;
-import com.lee.graphic_reasoning_server.vo.QuestionSourceStatVO;
+import com.lee.graphic_reasoning_server.util.DictTranslator;
+import com.lee.graphic_reasoning_server.vo.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.*;
 import java.util.function.Function;
@@ -37,32 +38,51 @@ public class QuestionServiceImpl implements QuestionService {
     private final QuestionMapper questionMapper;
     private final UserQuestionMapper userQuestionMapper;
     private final QuestionAnalysisMapper analysisMapper;
+    private final DictService dictService;
+    private final DictTranslator dictTranslator;
 
-    // ==================== 原有方法保持不变 ====================
+
+    /** ★ custom / 空 → 视为不过滤 */
+    private String normalizeExamType(String examType) {
+        if (StrUtil.isBlank(examType)) {
+            return null;
+        }
+        if ("custom".equalsIgnoreCase(examType)) {
+            return null;
+        }
+        return examType;
+    }
 
     @Override
     public List<QuestionPracticeVO> randomPractice(QuestionRandomDTO dto) {
         Long userId = UserContext.get();
 
-        // ★★★ 游客模式：不区分权重，简单随机抽题
-        if (userId == null) {
-            log.warn("未登录,Guest mode: random practice");
-            return randomForGuest(dto);
+        int count = dto.getCount() == null ? 10 : dto.getCount();
+        if (count <= 0 || count > 50) {
+            count = 10;
         }
 
-        int count = dto.getCount() == null ? 10 : dto.getCount();
-        if (count <= 0 || count > 50) count = 10;
+        String examType = normalizeExamType(dto.getExamType());
+
+        //游客模式：不区分权重，简单随机抽题
+        if (userId == null) {
+            log.warn("未登录,Guest mode: random practice");
+            return randomForGuest(dto, count);
+        }
+
 
         int wUnknown = dto.getWeightUnknown() == null ? 60 : dto.getWeightUnknown();
         int wCorrect = dto.getWeightCorrect() == null ? 20 : dto.getWeightCorrect();
-        int wWrong   = dto.getWeightWrong()   == null ? 20 : dto.getWeightWrong();
+        int wWrong = dto.getWeightWrong() == null ? 20 : dto.getWeightWrong();
         if (wUnknown + wCorrect + wWrong != 100) {
-            wUnknown = 60; wCorrect = 20; wWrong = 20;
+            wUnknown = 60;
+            wCorrect = 20;
+            wWrong = 20;
         }
 
         int targetUnknown = Math.max(0, Math.round(count * wUnknown / 100f));
         int targetCorrect = Math.max(0, Math.round(count * wCorrect / 100f));
-        int targetWrong   = count - targetUnknown - targetCorrect;
+        int targetWrong = count - targetUnknown - targetCorrect;
         if (targetWrong < 0) {
             targetWrong = 0;
             targetUnknown = count - targetCorrect;
@@ -70,11 +90,11 @@ public class QuestionServiceImpl implements QuestionService {
 
         List<Long> ids = new ArrayList<>();
         List<Long> unknownIds = questionMapper.randomUnknownIds(
-                userId, dto.getCategory(), dto.getExamType(), dto.getExamSubType(), targetUnknown);
+                userId, dto.getCategory(), examType, dto.getExamSubType(), targetUnknown);
         List<Long> correctIds = userQuestionMapper.randomCorrectIds(
-                userId, dto.getCategory(), dto.getExamType(), dto.getExamSubType(), targetCorrect);
+                userId, dto.getCategory(), examType, dto.getExamSubType(), targetCorrect);
         List<Long> wrongIds = userQuestionMapper.randomWrongIds(
-                userId, dto.getCategory(), dto.getExamType(), dto.getExamSubType(), targetWrong);
+                userId, dto.getCategory(), examType, dto.getExamSubType(), targetWrong);
 
         ids.addAll(unknownIds);
         ids.addAll(correctIds);
@@ -132,26 +152,27 @@ public class QuestionServiceImpl implements QuestionService {
                 .collect(Collectors.toList());
     }
 
-    /** ★ 游客随机抽题：不区分权重、不查历史 */
-    private List<QuestionPracticeVO> randomForGuest(QuestionRandomDTO dto) {
-        int count = dto.getCount() == null ? 10 : dto.getCount();
-        if (count <= 0 || count > 50) count = 10;
-
-        List<Long> ids = questionMapper.randomGuestIds(
+    /**
+     * ★ 游客随机抽题：不区分权重、不查历史
+     */
+    private List<QuestionPracticeVO> randomForGuest(QuestionRandomDTO dto, int count) {
+        List<Long> ids = questionMapper.randomPureIds(
                 dto.getCategory(), dto.getExamType(), dto.getExamSubType(), count);
-        if (ids.isEmpty()) return Collections.emptyList();
+        if (ids == null || ids.isEmpty()) {
+            return Collections.emptyList();
+        }
 
         List<Question> list = questionMapper.selectByIds(ids);
         Map<Long, Question> map = list.stream()
                 .collect(Collectors.toMap(Question::getId, Function.identity()));
 
+        // 保持 ids 顺序（SQL 里已经 RAND() 了）
         return ids.stream()
                 .map(map::get)
                 .filter(Objects::nonNull)
                 .map(q -> {
                     QuestionPracticeVO vo = new QuestionPracticeVO();
                     BeanUtil.copyProperties(q, vo);
-                    // userLastCorrect 保持 null，游客无历史记录
                     return vo;
                 })
                 .collect(Collectors.toList());
@@ -160,10 +181,13 @@ public class QuestionServiceImpl implements QuestionService {
     @Override
     public QuestionDetailVO detail(Long id) {
         Question q = questionMapper.selectById(id);
-        if (q == null) throw new BizException("题目不存在");
+        if (q == null) {
+            throw new BizException("题目不存在");
+        }
         QuestionDetailVO vo = new QuestionDetailVO();
         BeanUtil.copyProperties(q, vo);
         vo.setAnalyses(listAnalyses(id));
+        vo.setCategoryLabel(dictTranslator.valuePathToLabelPath(vo.getCategory()));
         return vo;
     }
 
@@ -186,7 +210,16 @@ public class QuestionServiceImpl implements QuestionService {
             BeanUtil.copyProperties(q, vo);
             return vo;
         }).collect(Collectors.toList());
-
+        if (CollectionUtil.isNotEmpty(records)) {
+            List<String> cats = records.stream()
+                    .map(QuestionDetailVO::getCategory)
+                    .filter(StrUtil::isNotBlank)
+                    .distinct()
+                    .collect(Collectors.toList());
+            Map<String, String> catMap = dictTranslator.batchValueToLabelPath(cats);
+            records.forEach(vo -> vo.setCategoryLabel(
+                    catMap.getOrDefault(vo.getCategory(), vo.getCategory())));
+        }
         return PageVO.of(page.getTotal(), page.getCurrent(), page.getSize(), records);
     }
 
@@ -204,7 +237,9 @@ public class QuestionServiceImpl implements QuestionService {
         return q.getId();
     }
 
-    /** 覆盖式写入：先删后插 */
+    /**
+     * 覆盖式写入：先删后插
+     */
     private void saveAnalyses(Long questionId, List<QuestionSaveDTO.AnalysisItem> analyses) {
         analysisMapper.delete(new LambdaQueryWrapper<QuestionAnalysis>()
                 .eq(QuestionAnalysis::getQuestionId, questionId));
@@ -292,11 +327,22 @@ public class QuestionServiceImpl implements QuestionService {
         }
 
         List<Question> list = questionMapper.selectList(qw);
-        return list.stream().map(q -> {
+        List<QuestionDetailVO> records = list.stream().map(q -> {
             QuestionDetailVO vo = new QuestionDetailVO();
             BeanUtil.copyProperties(q, vo); // canExtract 会自动拷贝
             return vo;
         }).collect(Collectors.toList());
+        if (CollectionUtil.isNotEmpty(records)) {
+            List<String> cats = records.stream()
+                    .map(QuestionDetailVO::getCategory)
+                    .filter(StrUtil::isNotBlank)
+                    .distinct()
+                    .collect(Collectors.toList());
+            Map<String, String> catMap = dictTranslator.batchValueToLabelPath(cats);
+            records.forEach(vo -> vo.setCategoryLabel(
+                    catMap.getOrDefault(vo.getCategory(), vo.getCategory())));
+        }
+        return records;
     }
 
     @Override
@@ -363,5 +409,85 @@ public class QuestionServiceImpl implements QuestionService {
         BeanUtil.copyProperties(q, vo);
         // QuestionPracticeVO 本身不含 correctOption / analysis，天然安全
         return vo;
+    }
+
+
+    @Override
+    public List<CategoryTreeVO> categoryTreeWithCount() {
+        // 1. 一次 SQL 拿到所有 value 路径的题数
+        List<Map<String, Object>> raw = questionMapper.selectCategoryCountGroupBy();
+        Map<String, Long> countMap = new HashMap<>();
+        if (raw != null) {
+            for (Map<String, Object> row : raw) {
+                Object catObj = row.get("category");
+                Object cntObj = row.get("cnt");
+                if (catObj == null || cntObj == null) {
+                    continue;
+                }
+                String cat = catObj.toString();
+                if (StrUtil.isBlank(cat)) {
+                    continue;
+                }
+                countMap.put(cat, ((Number) cntObj).longValue());
+            }
+        }
+
+        // 2. 拿字典树
+        List<DictVO> tree = dictService.treeByType("question_category");
+
+        // 3. 递归构建
+        return buildCategoryTree(tree, countMap, "", "");
+    }
+
+    /**
+     * 递归构建分类树
+     *
+     * @param nodes       当前层节点列表
+     * @param countMap    value 路径 → 题数
+     * @param parentValue 父级 value 路径
+     * @param parentLabel 父级 label 路径
+     */
+    private List<CategoryTreeVO> buildCategoryTree(
+            List<DictVO> nodes,
+            Map<String, Long> countMap,
+            String parentValue,
+            String parentLabel) {
+
+        List<CategoryTreeVO> result = new ArrayList<>();
+        if (nodes == null || nodes.isEmpty()) {
+            return result;
+        }
+
+        for (DictVO node : nodes) {
+            CategoryTreeVO vo = new CategoryTreeVO();
+            vo.setId(node.getId());
+            vo.setDictValue(node.getDictValue());
+            vo.setDictLabel(node.getDictLabel());
+
+            String valuePath = StrUtil.isBlank(parentValue)
+                    ? node.getDictValue()
+                    : parentValue + "/" + node.getDictValue();
+            String labelPath = StrUtil.isBlank(parentLabel)
+                    ? node.getDictLabel()
+                    : parentLabel + "/" + node.getDictLabel();
+
+            vo.setPath(valuePath);
+            vo.setLabelPath(labelPath);
+
+            // 子节点
+            List<CategoryTreeVO> children = buildCategoryTree(
+                    node.getChildren(), countMap, valuePath, labelPath);
+            vo.setChildren(children);
+
+            // 自身题数 + 所有子类题数
+            long selfCount = countMap.getOrDefault(valuePath, 0L);
+            long subCount = children.stream()
+                    .mapToLong(c -> c.getCount() == null ? 0L : c.getCount())
+                    .sum();
+            vo.setCount(selfCount + subCount);
+
+            result.add(vo);
+        }
+        return result;
     }
 }

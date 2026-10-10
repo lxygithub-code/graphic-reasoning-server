@@ -13,6 +13,7 @@ public class QuestionDetailVO {
     private String correctOption;
     private String source;
     private String category;
+    private String categoryLabel;
     private Integer difficulty;
     private String examType;
     private String examSubType;

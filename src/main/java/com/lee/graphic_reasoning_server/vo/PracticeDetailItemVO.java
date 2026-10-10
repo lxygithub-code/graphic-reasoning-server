@@ -20,4 +20,6 @@ public class PracticeDetailItemVO {
     private String source;
     private String examType;
     private String examSubType;
+    private String category;
+    private String categoryLabel;
 }
