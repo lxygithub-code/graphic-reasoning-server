@@ -49,6 +49,7 @@ public class PracticeServiceImpl implements PracticeService {
     private final QuestionService questionService;
     private final QuestionAnalysisMapper analysisMapper;
     private final DictTranslator dictTranslator;
+    private final AdminMessageService adminMessageService;
 
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
@@ -235,6 +236,8 @@ public class PracticeServiceImpl implements PracticeService {
         List<QuestionComment> comments = commentMapper.selectList(
                 new LambdaQueryWrapper<QuestionComment>()
                         .eq(QuestionComment::getQuestionId, questionId)
+                         //过滤管理员隐藏的评论
+                        .ne(QuestionComment::getStatus, 0)
                         .orderByDesc(QuestionComment::getLikeCount)
                         .orderByDesc(QuestionComment::getCreateTime)
                         .last("LIMIT 10"));
@@ -409,34 +412,63 @@ public class PracticeServiceImpl implements PracticeService {
         vo.setContent(comment.getContent());
         vo.setLikeCount(0);
         vo.setCreateTime(LocalDateTime.now().format(FMT));
+
+        // ★ 推送消息给所有管理员
+        adminMessageService.pushMessage(
+                null,                                    // null = 群发
+                "comment",
+                "新评论提醒",
+                StrUtil.maxLength(comment.getContent(), 100),
+                comment.getId(),
+                dto.getQuestionId()
+        );
+
         return vo;
     }
 
     @Override
     public List<CommentVO> listComments(Long questionId, Integer limit) {
         if (limit == null || limit <= 0 || limit > 50) limit = 10;
+
         List<QuestionComment> comments = commentMapper.selectList(
                 new LambdaQueryWrapper<QuestionComment>()
                         .eq(QuestionComment::getQuestionId, questionId)
+                        // ★ 1. 过滤管理员隐藏的评论（status=0）；ne 0 同时兜底 status 为 null 的老数据
+                        .ne(QuestionComment::getStatus, 0)
                         .orderByDesc(QuestionComment::getLikeCount)
                         .orderByDesc(QuestionComment::getCreateTime)
                         .last("LIMIT " + limit));
 
         if (comments.isEmpty()) return Collections.emptyList();
 
-        List<Long> userIds = comments.stream().map(QuestionComment::getUserId).distinct().collect(Collectors.toList());
-        Map<Long, String> nicknameMap = userMapper.selectByIds(userIds).stream()
-                .collect(Collectors.toMap(User::getId, u -> StrUtil.blankToDefault(u.getNickname(), "匿名用户")));
+        // ★ 2. 批量查用户对象（原来只拿昵称，现在要拿整个 User 才能判断 showComment）
+        List<Long> userIds = comments.stream()
+                .map(QuestionComment::getUserId)
+                .distinct()
+                .collect(Collectors.toList());
+        Map<Long, User> userMap = userMapper.selectByIds(userIds).stream()
+                .collect(Collectors.toMap(User::getId, Function.identity()));
 
-        return comments.stream().map(c -> {
-            CommentVO vo = new CommentVO();
-            vo.setId(c.getId());
-            vo.setNickname(nicknameMap.getOrDefault(c.getUserId(), "匿名用户"));
-            vo.setContent(c.getContent());
-            vo.setLikeCount(c.getLikeCount());
-            vo.setCreateTime(c.getCreateTime() == null ? null : c.getCreateTime().format(FMT));
-            return vo;
-        }).collect(Collectors.toList());
+        // ★ 3. 过滤掉 showComment=0 的用户评论，然后组装 VO
+        return comments.stream()
+                .filter(c -> {
+                    User author = userMap.get(c.getUserId());
+                    if (author == null) return false;
+                    Integer show = author.getShowComment();
+                    // 默认展示，只有明确为 0 才隐藏
+                    return show == null || show == 1;
+                })
+                .map(c -> {
+                    User author = userMap.get(c.getUserId());
+                    CommentVO vo = new CommentVO();
+                    vo.setId(c.getId());
+                    vo.setNickname(StrUtil.blankToDefault(author.getNickname(), "匿名用户"));
+                    vo.setContent(c.getContent());
+                    vo.setLikeCount(c.getLikeCount());
+                    vo.setCreateTime(c.getCreateTime() == null ? null : c.getCreateTime().format(FMT));
+                    return vo;
+                })
+                .collect(Collectors.toList());
     }
 
     @Override

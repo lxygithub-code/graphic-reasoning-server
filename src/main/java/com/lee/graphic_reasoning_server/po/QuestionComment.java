@@ -23,6 +23,10 @@ public class QuestionComment implements Serializable {
 
     private Integer likeCount;
 
+    private Integer status;
+
+    private String audit_remark;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
 
