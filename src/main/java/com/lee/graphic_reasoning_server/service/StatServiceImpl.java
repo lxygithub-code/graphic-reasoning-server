@@ -1,15 +1,15 @@
 package com.lee.graphic_reasoning_server.service;
 
 
+import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.lee.graphic_reasoning_server.common.PageVO;
 import com.lee.graphic_reasoning_server.mapper.*;
-import com.lee.graphic_reasoning_server.po.Dict;
-import com.lee.graphic_reasoning_server.po.PracticeRecord;
-import com.lee.graphic_reasoning_server.po.Question;
-import com.lee.graphic_reasoning_server.po.User;
-import com.lee.graphic_reasoning_server.service.StatService;
+import com.lee.graphic_reasoning_server.po.*;
+import com.lee.graphic_reasoning_server.vo.ActiveTrendVO;
 import com.lee.graphic_reasoning_server.vo.StatVO;
+import com.lee.graphic_reasoning_server.vo.UserDailyActiveVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -20,6 +20,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -30,7 +32,8 @@ public class StatServiceImpl implements StatService {
     private final PracticeRecordMapper practiceRecordMapper;
     private final PracticeRecordMapper recordMapper;
     private final DictMapper dictMapper;
-
+    private final UserDailyActiveMapper dailyActiveMapper;
+    private final UserHourlyActiveMapper hourlyActiveMapper;
 
     @Override
     public StatVO overview() {
@@ -38,11 +41,6 @@ public class StatServiceImpl implements StatService {
 
         vo.setUserCount(userMapper.selectCount(null));
         vo.setQuestionCount(questionMapper.selectCount(null));
-        vo.setPracticeCount(practiceRecordMapper.selectCount(null));
-
-        // 平均正确率：取所有练习记录的平均值
-        Double avg = practiceRecordMapper.selectAvgAccuracy();
-        vo.setAvgAccuracy(avg == null ? 0.0 : Math.round(avg * 100) / 100.0);
 
         // 今日新增用户
         LocalDateTime todayStart = LocalDate.now().atStartOfDay();
@@ -53,92 +51,10 @@ public class StatServiceImpl implements StatService {
         vo.setTodayPracticeCount(practiceRecordMapper.selectCount(
                 new LambdaQueryWrapper<PracticeRecord>().ge(PracticeRecord::getCreateTime, todayStart)));
 
+        // 可抽取题目数
+        vo.setExtractableCount(questionMapper.selectCount(
+                new LambdaQueryWrapper<Question>().eq(Question::getCanExtract, 1)));
         return vo;
-    }
-
-    @Override
-    public Map<String, Object> growth(Integer days) {
-        if (days == null || days <= 0 || days > 90) days = 7;
-
-        List<String> dates = new ArrayList<>();
-        List<Long> newUsers = new ArrayList<>();
-        List<Long> newQuestions = new ArrayList<>();
-        List<Long> newPractices = new ArrayList<>();
-
-        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("MM-dd");
-        LocalDate today = LocalDate.now();
-
-        for (int i = days - 1; i >= 0; i--) {
-            LocalDate day = today.minusDays(i);
-            LocalDateTime start = day.atStartOfDay();
-            LocalDateTime end = day.plusDays(1).atStartOfDay();
-
-            dates.add(day.format(fmt));
-            newUsers.add(userMapper.selectCount(
-                    new LambdaQueryWrapper<User>().ge(User::getCreateTime, start).lt(User::getCreateTime, end)));
-            newQuestions.add(questionMapper.selectCount(
-                    new LambdaQueryWrapper<Question>().ge(Question::getCreateTime, start).lt(Question::getCreateTime, end)));
-            newPractices.add(recordMapper.selectCount(
-                    new LambdaQueryWrapper<PracticeRecord>().ge(PracticeRecord::getCreateTime, start).lt(PracticeRecord::getCreateTime, end)));
-        }
-
-        Map<String, Object> result = new HashMap<>();
-        result.put("dates", dates);
-        result.put("newUsers", newUsers);
-        result.put("newQuestions", newQuestions);
-        result.put("newPractices", newPractices);
-        return result;
-    }
-
-    @Override
-    public Map<String, Object> active(Integer days) {
-        if (days == null || days <= 0 || days > 90) days = 7;
-
-        List<String> dates = new ArrayList<>();
-        List<Long> activeUsers = new ArrayList<>();
-        List<Long> practiceCount = new ArrayList<>();
-
-        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("MM-dd");
-        LocalDate today = LocalDate.now();
-
-        for (int i = days - 1; i >= 0; i--) {
-            LocalDate day = today.minusDays(i);
-            LocalDateTime start = day.atStartOfDay();
-            LocalDateTime end = day.plusDays(1).atStartOfDay();
-
-            dates.add(day.format(fmt));
-            // 活跃用户数：当天有练习记录的去重用户数
-            Long users = recordMapper.selectCount(
-                    new LambdaQueryWrapper<PracticeRecord>()
-                            .select(PracticeRecord::getUserId)
-                            .ge(PracticeRecord::getCreateTime, start)
-                            .lt(PracticeRecord::getCreateTime, end)
-                            .groupBy(PracticeRecord::getUserId)
-                            .last("LIMIT 1"));
-            // ★ 上面这条不好用，直接用 SQL 去重
-            activeUsers.add(activeUsersByDay(start, end));
-            practiceCount.add(recordMapper.selectCount(
-                    new LambdaQueryWrapper<PracticeRecord>()
-                            .ge(PracticeRecord::getCreateTime, start)
-                            .lt(PracticeRecord::getCreateTime, end)));
-        }
-
-        Map<String, Object> result = new HashMap<>();
-        result.put("dates", dates);
-        result.put("activeUsers", activeUsers);
-        result.put("practiceCount", practiceCount);
-        return result;
-    }
-
-    /** 去重统计当天活跃用户数 */
-    private Long activeUsersByDay(LocalDateTime start, LocalDateTime end) {
-        QueryWrapper<PracticeRecord> qw = new QueryWrapper<>();
-        qw.select("COUNT(DISTINCT user_id) AS cnt")
-                .ge("create_time", start)
-                .lt("create_time", end);
-        Map<String, Object> map = recordMapper.selectMaps(qw).get(0);
-        Object cnt = map.get("cnt");
-        return cnt == null ? 0L : Long.valueOf(cnt.toString());
     }
 
     @Override
@@ -152,27 +68,21 @@ public class StatServiceImpl implements StatService {
 
         List<Map<String, Object>> result = new ArrayList<>();
         for (Dict l1 : l1List) {
-            // 统计该一级分类下所有二级分类的题目总数
-            List<Dict> l2List = dictMapper.selectList(
-                    new LambdaQueryWrapper<Dict>()
-                            .eq(Dict::getParentId, l1.getId())
-                            .eq(Dict::getStatus, 1));
-            List<String> labelList = new ArrayList<>();
-            labelList.add(l1.getDictLabel());
-            for (Dict l2 : l2List) labelList.add(l1.getDictLabel() + "/" + l2.getDictLabel());
+            // ★ 用 dictValue 匹配，不用 dictLabel
+            String l1Value = l1.getDictValue();
 
-            // 用 like 匹配 category 字段（category 存的是"一级/二级"）
             Long count = questionMapper.selectCount(
                     new LambdaQueryWrapper<Question>()
-                            .and(w -> {
-                                w.likeRight(Question::getCategory, l1.getDictLabel() + "/")
-                                        .or()
-                                        .eq(Question::getCategory, l1.getDictLabel());
-                            })
+                            .and(w -> w
+                                    // 自身等于一级 value
+                                    .eq(Question::getCategory, l1Value)
+                                    // 或者以 "一级 value/" 开头（含所有子类）
+                                    .or()
+                                    .likeRight(Question::getCategory, l1Value + "/"))
                             .and(w -> w.eq(Question::getCanExtract, 1)));
 
             Map<String, Object> item = new HashMap<>();
-            item.put("name", l1.getDictLabel());
+            item.put("name", l1.getDictLabel());   // 展示用 label
             item.put("value", count);
             result.add(item);
         }
@@ -189,6 +99,172 @@ public class StatServiceImpl implements StatService {
             result.add(item);
         }
 
+        return result;
+    }
+
+    @Override
+    public ActiveTrendVO activeTrend(Integer days) {
+        if (days == null || days <= 0 || days > 90) days = 7;
+
+        ActiveTrendVO vo = new ActiveTrendVO();
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("MM-dd");
+        LocalDate today = LocalDate.now();
+
+        for (int i = days - 1; i >= 0; i--) {
+            LocalDate d = today.minusDays(i);
+            Long count = dailyActiveMapper.selectCount(
+                    new LambdaQueryWrapper<UserDailyActive>()
+                            .eq(UserDailyActive::getActiveDate, d));
+
+            vo.getDates().add(d.format(fmt));
+            vo.getCounts().add(count == null ? 0L : count);
+        }
+
+        // 今日/昨日
+        if (!vo.getCounts().isEmpty()) {
+            vo.setTodayCount(vo.getCounts().get(vo.getCounts().size() - 1));
+            if (vo.getCounts().size() >= 2) {
+                vo.setYesterdayCount(vo.getCounts().get(vo.getCounts().size() - 2));
+            }
+        }
+        return vo;
+    }
+
+    @Override
+    public PageVO<UserDailyActiveVO> todayActiveUsers(Integer pageNum, Integer pageSize) {
+        if (pageNum == null || pageNum < 1) pageNum = 1;
+        if (pageSize == null || pageSize < 1) pageSize = 20;
+
+        Page<UserDailyActive> page = dailyActiveMapper.selectPage(
+                new Page<>(pageNum, pageSize),
+                new LambdaQueryWrapper<UserDailyActive>()
+                        .eq(UserDailyActive::getActiveDate, LocalDate.now())
+                        .orderByDesc(UserDailyActive::getLastTime));
+
+        List<UserDailyActiveVO> records = new ArrayList<>();
+        if (!page.getRecords().isEmpty()) {
+            List<Long> userIds = page.getRecords().stream()
+                    .map(UserDailyActive::getUserId)
+                    .distinct()
+                    .collect(Collectors.toList());
+
+            Map<Long, User> userMap = userMapper.selectByIds(userIds).stream()
+                    .collect(Collectors.toMap(User::getId, Function.identity()));
+
+            for (UserDailyActive a : page.getRecords()) {
+                UserDailyActiveVO vo = new UserDailyActiveVO();
+                vo.setUserId(a.getUserId());
+                vo.setActiveDate(a.getActiveDate());
+                vo.setRequestCount(a.getRequestCount());
+                vo.setFirstTime(a.getFirstTime());
+                vo.setLastTime(a.getLastTime());
+
+                User u = userMap.get(a.getUserId());
+                if (u != null) {
+                    vo.setNickname(StrUtil.blankToDefault(u.getNickname(), "匿名"));
+                    vo.setAvatarUrl(u.getAvatarUrl());
+                } else {
+                    vo.setNickname("匿名");
+                }
+                records.add(vo);
+            }
+        }
+
+        return PageVO.of(page.getTotal(), page.getCurrent(), page.getSize(), records);
+    }
+
+    @Override
+    public Map<String, Object> extractableTrend(Integer days) {
+        if (days == null || days <= 0 || days > 90) {
+            days = 7;
+        }
+
+        List<String> dates = new ArrayList<>();
+        List<Long> guokao = new ArrayList<>();
+        List<Long> shengkao = new ArrayList<>();
+        List<Long> shiye = new ArrayList<>();
+
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("MM-dd");
+        LocalDate today = LocalDate.now();
+
+        for (int i = days - 1; i >= 0; i--) {
+            LocalDate day = today.minusDays(i);
+            // 截止到当天 23:59:59
+            LocalDateTime dayEnd = day.plusDays(1).atStartOfDay();
+
+            dates.add(day.format(fmt));
+            guokao.add(countExtractableUpTo("guokao", dayEnd));
+            shengkao.add(countExtractableUpTo("shengkao", dayEnd));
+            shiye.add(countExtractableUpTo("shiye", dayEnd));
+        }
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("dates", dates);
+        result.put("guokao", guokao);
+        result.put("shengkao", shengkao);
+        result.put("shiye", shiye);
+        return result;
+    }
+
+    /**
+     * 统计截止到某个时间点的可抽取题目总数（累积）
+     */
+    private Long countExtractableUpTo(String examType, LocalDateTime upTo) {
+        Long c = questionMapper.selectCount(
+                new LambdaQueryWrapper<Question>()
+                        .eq(Question::getExamType, examType)
+                        .eq(Question::getCanExtract, 1)
+                        .lt(Question::getCreateTime, upTo));
+        return c == null ? 0L : c;
+    }
+
+
+    @Override
+    public Map<String, Object> peakHour() {
+        Map<String, Object> result = new HashMap<>();
+        LocalDate today = LocalDate.now();
+
+        Map<String, Object> peak = hourlyActiveMapper.selectPeakHour(today);
+        if (peak == null || peak.get("hour") == null) {
+            result.put("hour", null);
+            result.put("count", 0L);
+            return result;
+        }
+
+        Object hourObj = peak.get("hour");
+        Object cntObj = peak.get("cnt");
+        int hour = ((Number) hourObj).intValue();
+        long count = ((Number) cntObj).longValue();
+
+        result.put("hour", hour);
+        result.put("count", count);
+        return result;
+    }
+
+    @Override
+    public Map<String, Object> todayHourlyActive() {
+        LocalDate today = LocalDate.now();
+        List<Map<String, Object>> rows = hourlyActiveMapper.selectHourlyCount(today);
+
+        // 24 个小时，缺失补 0
+        long[] counts = new long[24];
+        for (Map<String, Object> row : rows) {
+            if (row.get("hour") == null || row.get("cnt") == null) continue;
+            int h = ((Number) row.get("hour")).intValue();
+            long c = ((Number) row.get("cnt")).longValue();
+            if (h >= 0 && h < 24) counts[h] = c;
+        }
+
+        List<String> hours = new ArrayList<>();
+        List<Long> values = new ArrayList<>();
+        for (int i = 0; i < 24; i++) {
+            hours.add(String.format("%02d:00", i));
+            values.add(counts[i]);
+        }
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("hours", hours);
+        result.put("counts", values);
         return result;
     }
 }

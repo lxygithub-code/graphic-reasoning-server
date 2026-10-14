@@ -13,4 +13,6 @@ public class AdminUserVO {
     private Integer showComment;
     private String lastLoginTime;
     private String createTime;
+    /** 最近活跃时间 */
+    private String lastActiveTime;
 }

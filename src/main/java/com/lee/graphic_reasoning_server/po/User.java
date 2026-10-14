@@ -47,4 +47,7 @@ public class User implements Serializable {
 
     /** 是否展示评论内容：0隐藏 1展示 */
     private Integer showComment;
+
+    /** 最近活跃时间（每次请求刷新，5 分钟防抖） */
+    private LocalDateTime lastActiveTime;
 }

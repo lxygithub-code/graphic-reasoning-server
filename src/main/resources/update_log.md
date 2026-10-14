@@ -21,3 +21,36 @@ PRIMARY KEY (`id`),
 KEY `idx_admin_read` (`admin_id`, `is_read`),
 KEY `idx_create_time` (`create_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='管理员消息表';
+
+
+
+ADD:记录小程序日活/时活
+
+SQL:
+ALTER TABLE t_user
+ADD COLUMN `last_active_time` DATETIME DEFAULT NULL COMMENT '最近活跃时间' AFTER `last_login_time`;
+
+
+CREATE TABLE `t_user_daily_active` (
+`id` BIGINT NOT NULL AUTO_INCREMENT,
+`user_id` BIGINT NOT NULL,
+`active_date` DATE NOT NULL COMMENT '活跃日期',
+`request_count` INT NOT NULL DEFAULT 1 COMMENT '当日请求次数',
+`first_time` DATETIME NOT NULL COMMENT '当日首次活跃时间',
+`last_time` DATETIME NOT NULL COMMENT '当日最后活跃时间',
+PRIMARY KEY (`id`),
+UNIQUE KEY `uk_user_date` (`user_id`, `active_date`),
+KEY `idx_date` (`active_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户每日活跃表';
+
+
+CREATE TABLE `t_user_hourly_active` (
+`id` BIGINT NOT NULL AUTO_INCREMENT,
+`user_id` BIGINT NOT NULL,
+`active_date` DATE NOT NULL COMMENT '活跃日期',
+`active_hour` TINYINT NOT NULL COMMENT '活跃小时 0-23',
+`create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+PRIMARY KEY (`id`),
+UNIQUE KEY `uk_user_date_hour` (`user_id`, `active_date`, `active_hour`),
+KEY `idx_date_hour` (`active_date`, `active_hour`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户每小时活跃表';

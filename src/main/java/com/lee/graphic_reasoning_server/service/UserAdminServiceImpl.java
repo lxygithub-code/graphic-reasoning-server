@@ -39,6 +39,7 @@ public class UserAdminServiceImpl implements UserAdminService {
             AdminUserVO vo = new AdminUserVO();
             BeanUtil.copyProperties(u, vo);
             if (u.getLastLoginTime() != null) vo.setLastLoginTime(u.getLastLoginTime().format(FMT));
+            if (u.getLastActiveTime() != null) vo.setLastActiveTime(u.getLastActiveTime().format(FMT));
             if (u.getCreateTime() != null) vo.setCreateTime(u.getCreateTime().format(FMT));
             return vo;
         }).collect(Collectors.toList());
