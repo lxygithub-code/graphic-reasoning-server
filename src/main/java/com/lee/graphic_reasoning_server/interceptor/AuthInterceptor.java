@@ -55,7 +55,8 @@ public class AuthInterceptor implements HandlerInterceptor {
             "/api/practice/records",
             "/api/practice/wrong",
             "/api/auth/me",
-            "/api/auth/profile"
+            "/api/auth/profile",
+            "/api/feedback"
     );
 
     @Override

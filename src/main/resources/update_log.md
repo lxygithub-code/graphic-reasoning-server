@@ -54,3 +54,30 @@ PRIMARY KEY (`id`),
 UNIQUE KEY `uk_user_date_hour` (`user_id`, `active_date`, `active_hour`),
 KEY `idx_date_hour` (`active_date`, `active_hour`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户每小时活跃表';
+
+
+
+2026-10-15
+
+ADD:小程序新增意见箱
+
+SQL：
+
+CREATE TABLE `t_feedback` (
+`id` BIGINT NOT NULL AUTO_INCREMENT,
+`user_id` BIGINT NOT NULL COMMENT '提交用户ID',
+`content` TEXT NOT NULL COMMENT '意见内容',
+`status` TINYINT NOT NULL DEFAULT 0 COMMENT '0待处理 1处理中 2已解决',
+`reply_content` TEXT DEFAULT NULL COMMENT '管理员回复内容',
+`reply_admin_id` BIGINT DEFAULT NULL COMMENT '回复的管理员ID',
+`reply_admin_name` VARCHAR(100) DEFAULT '' COMMENT '回复的管理员名称（快照）',
+`reply_time` DATETIME DEFAULT NULL COMMENT '回复时间',
+`user_read` TINYINT NOT NULL DEFAULT 1 COMMENT '用户是否已读回复 0未读 1已读',
+`create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+`update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+`deleted` TINYINT NOT NULL DEFAULT 0,
+PRIMARY KEY (`id`),
+KEY `idx_user` (`user_id`),
+KEY `idx_status` (`status`),
+KEY `idx_create_time` (`create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户意见反馈表';
