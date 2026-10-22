@@ -1,9 +1,7 @@
 package com.lee.graphic_reasoning_server.service;
 
 import com.lee.graphic_reasoning_server.common.PageVO;
-import com.lee.graphic_reasoning_server.vo.ActiveTrendVO;
-import com.lee.graphic_reasoning_server.vo.StatVO;
-import com.lee.graphic_reasoning_server.vo.UserDailyActiveVO;
+import com.lee.graphic_reasoning_server.vo.*;
 
 import java.util.List;
 import java.util.Map;
@@ -26,4 +24,12 @@ public interface StatService {
 
     /** 今日各时段活跃用户数 */
     Map<String, Object> todayHourlyActive();
+
+    UserEngagementVO getEngagement(Integer days);
+
+    WrongAnalysisVO getWrongAnalysis();
+
+    UserRetentionVO getUserRetention(Integer days);
+
+    List<Map<String, Object>> getRetentionUserList(Integer days, String type);
 }

@@ -219,14 +219,18 @@ public class PracticeServiceImpl implements PracticeService {
                         .eq(WrongQuestion::getUserId, userId)
                         .eq(WrongQuestion::getQuestionId, questionId));
         if (w == null) {
+            // 首次做错
             w = new WrongQuestion();
             w.setUserId(userId);
             w.setQuestionId(questionId);
             w.setWrongCount(1);
             w.setLastWrongTime(LocalDateTime.now());
+            w.setDeleted(0);
             wrongMapper.insert(w);
         } else {
-            w.setWrongCount(w.getWrongCount() + 1);
+            // 存在记录（可能是已删除状态）
+            w.setDeleted(0); // ★ 核心：重置为未删除，重新回到错题本
+            w.setWrongCount(w.getWrongCount() + 1); // 累加错误次数
             w.setLastWrongTime(LocalDateTime.now());
             wrongMapper.updateById(w);
         }
@@ -504,6 +508,7 @@ public class PracticeServiceImpl implements PracticeService {
                 new Page<>(pageNum, pageSize),
                 new LambdaQueryWrapper<WrongQuestion>()
                         .eq(WrongQuestion::getUserId, userId)
+                        .eq(WrongQuestion::getDeleted, 0)
                         .orderByDesc(WrongQuestion::getLastWrongTime));
 
         List<Long> qIds = page.getRecords().stream()
@@ -542,7 +547,10 @@ public class PracticeServiceImpl implements PracticeService {
     public void removeWrong(Long questionId) {
         Long userId = UserContext.get();
         if (userId == null) throw new BizException("未登录");
-        wrongMapper.delete(new LambdaQueryWrapper<WrongQuestion>()
+        WrongQuestion update = new WrongQuestion();
+        update.setDeleted(1);  // 标记为已删除
+
+        wrongMapper.update(update, new LambdaQueryWrapper<WrongQuestion>()
                 .eq(WrongQuestion::getUserId, userId)
                 .eq(WrongQuestion::getQuestionId, questionId));
     }

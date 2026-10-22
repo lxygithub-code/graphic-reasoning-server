@@ -28,4 +28,7 @@ public class WrongQuestion implements Serializable {
 
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updateTime;
+
+    /** 逻辑删除 0未删除 1已删除 */
+    private Integer deleted;
 }

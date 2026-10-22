@@ -5,6 +5,7 @@ import lombok.Data;
 @Data
 public class AdminUserVO {
     private Long id;
+    private String openid;
     private String nickname;
     private String avatarUrl;
     private Integer gender;

@@ -3,9 +3,7 @@ package com.lee.graphic_reasoning_server.controller;
 import com.lee.graphic_reasoning_server.common.PageVO;
 import com.lee.graphic_reasoning_server.common.R;
 import com.lee.graphic_reasoning_server.service.StatService;
-import com.lee.graphic_reasoning_server.vo.ActiveTrendVO;
-import com.lee.graphic_reasoning_server.vo.StatVO;
-import com.lee.graphic_reasoning_server.vo.UserDailyActiveVO;
+import com.lee.graphic_reasoning_server.vo.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -65,5 +63,31 @@ public class StatController {
     @GetMapping("/today-hourly-active")
     public R<Map<String, Object>> todayHourlyActive() {
         return R.ok(statService.todayHourlyActive());
+    }
+
+
+    /** 用户活跃与请求统计 */
+    @GetMapping("/engagement")
+    public R<UserEngagementVO> engagement(@RequestParam(defaultValue = "7") Integer days) {
+        return R.ok(statService.getEngagement(days));
+    }
+
+    /** 错题重灾区分析 */
+    @GetMapping("/wrong-analysis")
+    public R<WrongAnalysisVO> wrongAnalysis() {
+        return R.ok(statService.getWrongAnalysis());
+    }
+
+    @GetMapping("/retention")
+    public R<UserRetentionVO> retention(@RequestParam(defaultValue = "7") Integer days) {
+        return R.ok(statService.getUserRetention(days));
+    }
+
+    /** 获取活跃分层用户明细 */
+    @GetMapping("/retention-users")
+    public R<List<Map<String, Object>>> retentionUsers(
+            @RequestParam(defaultValue = "7") Integer days,
+            @RequestParam(defaultValue = "multiple") String type) {
+        return R.ok(statService.getRetentionUserList(days, type));
     }
 }

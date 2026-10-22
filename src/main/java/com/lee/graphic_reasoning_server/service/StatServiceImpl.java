@@ -7,9 +7,8 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lee.graphic_reasoning_server.common.PageVO;
 import com.lee.graphic_reasoning_server.mapper.*;
 import com.lee.graphic_reasoning_server.po.*;
-import com.lee.graphic_reasoning_server.vo.ActiveTrendVO;
-import com.lee.graphic_reasoning_server.vo.StatVO;
-import com.lee.graphic_reasoning_server.vo.UserDailyActiveVO;
+import com.lee.graphic_reasoning_server.util.DictTranslator;
+import com.lee.graphic_reasoning_server.vo.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -30,10 +29,11 @@ public class StatServiceImpl implements StatService {
     private final UserMapper userMapper;
     private final QuestionMapper questionMapper;
     private final PracticeRecordMapper practiceRecordMapper;
-    private final PracticeRecordMapper recordMapper;
     private final DictMapper dictMapper;
     private final UserDailyActiveMapper dailyActiveMapper;
     private final UserHourlyActiveMapper hourlyActiveMapper;
+    private final WrongQuestionMapper wrongQuestionMapper;
+    private final DictTranslator dictTranslator;
 
     @Override
     public StatVO overview() {
@@ -266,5 +266,112 @@ public class StatServiceImpl implements StatService {
         result.put("hours", hours);
         result.put("counts", values);
         return result;
+    }
+
+    @Override
+    public UserEngagementVO getEngagement(Integer days) {
+        if (days == null || days <= 0) days = 7;
+        LocalDate startDate = LocalDate.now().minusDays(days - 1);
+
+        UserEngagementVO vo = new UserEngagementVO();
+
+        // 1. 累计请求次数
+        Long totalReq = dailyActiveMapper.selectTotalRequests(startDate);
+        vo.setTotalRequests(totalReq == null ? 0L : totalReq);
+
+        // 2. 每日请求趋势
+        List<Map<String, Object>> dailyMap = dailyActiveMapper.selectDailyRequests(startDate);
+        List<String> dates = new ArrayList<>();
+        List<Long> reqs = new ArrayList<>();
+
+        Map<String, Long> map = new HashMap<>();
+        for (Map<String, Object> row : dailyMap) {
+            // row.get("date") 可能是 java.sql.Date，需要格式化
+            String d = row.get("date").toString().substring(5); // 截取 MM-dd
+            Long c = ((Number) row.get("count")).longValue();
+            map.put(d, c);
+        }
+
+        LocalDate today = LocalDate.now();
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("MM-dd");
+        long totalActive = 0;
+        for (int i = days - 1; i >= 0; i--) {
+            String d = today.minusDays(i).format(fmt);
+            dates.add(d);
+            Long c = map.getOrDefault(d, 0L);
+            reqs.add(c);
+            totalActive += c;
+        }
+        vo.setDates(dates);
+        vo.setDailyRequests(reqs);
+        vo.setTotalActiveDays(totalActive); // 这里用总请求量代替活跃人次，更直观
+
+        return vo;
+    }
+
+    @Override
+    public WrongAnalysisVO getWrongAnalysis() {
+        WrongAnalysisVO vo = new WrongAnalysisVO();
+
+        // 1. 错题类型分布（一级）
+        List<Map<String, Object>> catRows = wrongQuestionMapper.selectWrongCategoryStats();
+        List<Map<String, Object>> catStats = new ArrayList<>();
+        for (Map<String, Object> row : catRows) {
+            String catValue = (String) row.get("category");
+            Long count = ((Number) row.get("totalWrong")).longValue();
+
+            // 直接翻译一级 value 即可，不用 split
+            String catLabel = dictTranslator.valuePathToLabelPath(catValue);
+            if (StrUtil.isBlank(catLabel) || "null".equals(catLabel)) {
+                catLabel = "未分类";
+            }
+
+            Map<String, Object> item = new HashMap<>();
+            item.put("name", catLabel);
+            item.put("value", count);
+            catStats.add(item);
+        }
+        vo.setCategoryStats(catStats);
+
+        // 2. 错题 TOP 10
+        List<Map<String, Object>> topRows = wrongQuestionMapper.selectTopWrongQuestions();
+        List<Map<String, Object>> topList = new ArrayList<>();
+        for (Map<String, Object> row : topRows) {
+            String catValue = (String) row.get("category");
+            String catLabel = dictTranslator.valuePathToLabelPath(catValue);
+
+            Map<String, Object> item = new HashMap<>();
+            item.put("questionId", row.get("questionId"));
+            // 题干截断，防止过长
+            String content = (String) row.get("content");
+            item.put("content", StrUtil.maxLength(content, 40));
+            item.put("categoryLabel", catLabel);
+            item.put("wrongCount", row.get("wrongCount"));
+            topList.add(item);
+        }
+        vo.setTopWrongQuestions(topList);
+
+        return vo;
+    }
+
+    @Override
+    public UserRetentionVO getUserRetention(Integer days) {
+        if (days == null || days <= 0) days = 7;
+        LocalDate startDate = LocalDate.now().minusDays(days - 1);
+
+        Map<String, Object> res = dailyActiveMapper.selectRetentionStats(startDate);
+        UserRetentionVO vo = new UserRetentionVO();
+        if (res != null) {
+            if (res.get("onceCount") != null) vo.setOnceCount(((Number)res.get("onceCount")).longValue());
+            if (res.get("multipleCount") != null) vo.setMultipleCount(((Number)res.get("multipleCount")).longValue());
+        }
+        return vo;
+    }
+
+    @Override
+    public List<Map<String, Object>> getRetentionUserList(Integer days, String type) {
+        if (days == null || days <= 0) days = 7;
+        LocalDate startDate = LocalDate.now().minusDays(days - 1);
+        return dailyActiveMapper.selectRetentionUserList(startDate, type);
     }
 }
