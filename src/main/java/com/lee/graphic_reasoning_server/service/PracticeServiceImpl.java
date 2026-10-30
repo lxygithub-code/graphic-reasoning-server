@@ -25,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -89,7 +90,20 @@ public class PracticeServiceImpl implements PracticeService {
             }
 
             if (!isCorrect && StrUtil.isNotBlank(dto.getUserAnswer())) {
+                // 1. 记录错题本
                 upsertWrong(userId, q.getId());
+
+                // 2. 新增：记录作答明细（为了错题详情和PDF导出能查出错选）
+                PracticeDetail detail = new PracticeDetail();
+                detail.setRecordId(0L); // 0 表示这是单题背题模式，不属于整套卷子
+                detail.setUserId(userId);
+                detail.setQuestionId(q.getId());
+                detail.setUserOption(dto.getUserAnswer());
+                detail.setCorrectOption(q.getCorrectOption());
+                detail.setIsCorrect(0);
+                detail.setDuration(dto.getTimeSpent() == null ? 0 : dto.getTimeSpent());
+                detail.setCreateTime(LocalDateTime.now());
+                detailMapper.insert(detail);
             }
         }
 
@@ -100,7 +114,7 @@ public class PracticeServiceImpl implements PracticeService {
         vo.setAnalyses(questionService.listAnalyses(q.getId()));
         vo.setComments(loadComments(q.getId()));
 
-        // ★ 游客默认禁止评论（前端会隐藏输入框）
+        // 游客默认禁止评论（前端会隐藏输入框）
         int canComment = 0;
         if (userId != null) {
             User user = userMapper.selectById(userId);
@@ -614,5 +628,15 @@ public class PracticeServiceImpl implements PracticeService {
         }
         vo.setCategoryLabel(dictTranslator.valuePathToLabelPath(vo.getCategory()));
         return vo;
+    }
+
+    @Override
+    public List<WrongRankingVO> getYesterdayWrongRanking() {
+        // 计算昨天的 00:00:00 和今天的 00:00:00
+        LocalDate yesterday = LocalDate.now().minusDays(1);
+        LocalDateTime startTime = yesterday.atStartOfDay();
+        LocalDateTime endTime = LocalDate.now().atStartOfDay();
+
+        return detailMapper.selectYesterdayWrongRanking(startTime, endTime);
     }
 }

@@ -29,7 +29,8 @@ public class WebConfig implements WebMvcConfigurer {
                 .excludePathPatterns(
                         "/api/auth/login",       // 登录接口本身
                         "/api/auth/admin/**",    // 管理端登录
-                        "/api/admin/**"          // 管理端由上面那个拦截器处理
+                        "/api/admin/**",        // 管理端由上面那个拦截器处理
+                        "/api/practice/wrong/yesterday-ranking" // 昨日排行榜游客可看
                 )
                 .order(2);
     }

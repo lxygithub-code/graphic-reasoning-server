@@ -8,16 +8,13 @@ import com.aliyun.oss.OSS;
 import com.aliyun.oss.model.ObjectMetadata;
 import com.lee.graphic_reasoning_server.common.BizException;
 import com.lee.graphic_reasoning_server.config.OssConfig;
-import com.lee.graphic_reasoning_server.service.OssService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 
@@ -84,5 +81,40 @@ public class OssServiceImpl implements OssService {
 
     private String buildUrl(String objectKey) {
         return ossConfig.getUrlPrefix() + "/" + objectKey;
+    }
+
+
+    @Override
+    public String uploadBytes(byte[] data, String objectKey, String contentType) {
+        if (data == null || data.length == 0) {
+            throw new BizException("上传数据不能为空");
+        }
+
+        try (InputStream is = new ByteArrayInputStream(data)) {
+            ObjectMetadata meta = new ObjectMetadata();
+            meta.setContentLength(data.length);
+            meta.setContentType(contentType);
+
+            // ★ 核心修改：处理中文文件名，强制浏览器识别正确的文件名
+            // 判断如果是 pdf，则设置响应头
+            if (objectKey.endsWith(".pdf")) {
+                // 提取最后一段作为文件名
+                String fileName = objectKey.substring(objectKey.lastIndexOf("/") + 1);
+                try {
+                    // 对中文名进行 URL 编码
+                    String encodedFileName = java.net.URLEncoder.encode(fileName, StandardCharsets.UTF_8).replace("+", "%20");
+                    // 设置 Content-Disposition (attachment 表示作为附件下载/预览)
+                    meta.setContentDisposition("attachment; filename=\"" + encodedFileName + "\"; filename*=utf-8''" + encodedFileName);
+                } catch (Exception e) {
+                    log.warn("PDF文件名编码失败", e);
+                }
+            }
+
+            ossClient.putObject(ossConfig.getBucketName(), objectKey, is, meta);
+            return buildUrl(objectKey);
+        } catch (Exception e) {
+            log.error("OSS 上传字节流失败: {}", objectKey, e);
+            throw new BizException("文件上传失败");
+        }
     }
 }

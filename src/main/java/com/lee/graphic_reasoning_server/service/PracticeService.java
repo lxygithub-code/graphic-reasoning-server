@@ -30,4 +30,6 @@ public interface PracticeService {
     void removeWrong(Long questionId);
 
     WrongQuestionDetailVO getWrongDetail(Long questionId);
+
+    List<WrongRankingVO> getYesterdayWrongRanking();
 }

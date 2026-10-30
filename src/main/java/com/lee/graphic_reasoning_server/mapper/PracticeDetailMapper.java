@@ -3,10 +3,12 @@ package com.lee.graphic_reasoning_server.mapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.lee.graphic_reasoning_server.po.PracticeDetail;
 import com.lee.graphic_reasoning_server.vo.QuestionDifficultyStatVO;
+import com.lee.graphic_reasoning_server.vo.WrongRankingVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Mapper
@@ -30,4 +32,20 @@ public interface PracticeDetailMapper extends BaseMapper<PracticeDetail> {
                 HAVING COUNT(*) >= #{minCount}
             """)
     List<QuestionDifficultyStatVO> selectDifficultyStats(@Param("minCount") int minCount);
+
+    @Select("""
+                SELECT 
+                    d.question_id AS questionId, 
+                    COUNT(d.id) AS wrongCount,
+                    q.content AS content
+                FROM t_practice_detail d
+                JOIN t_question q ON d.question_id = q.id
+                WHERE d.create_time >= #{startTime} 
+                  AND d.create_time < #{endTime}
+                  AND d.is_correct = 0
+                GROUP BY d.question_id, q.content
+                ORDER BY wrongCount DESC
+                LIMIT 5
+            """)
+    List<WrongRankingVO> selectYesterdayWrongRanking(@Param("startTime") LocalDateTime startTime, @Param("endTime") LocalDateTime endTime);
 }

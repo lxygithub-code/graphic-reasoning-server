@@ -109,6 +109,18 @@
 			<artifactId>aliyun-sdk-oss</artifactId>
 			<version>3.17.4</version>
 		</dependency>
+		<!-- PDF 生成库 -->
+		<dependency>
+			<groupId>com.github.librepdf</groupId>
+			<artifactId>openpdf</artifactId>
+			<version>1.3.39</version>
+		</dependency>
+		<!-- 如果使用自定义中文字体，可能需要 -->
+		<dependency>
+			<groupId>com.itextpdf</groupId>
+			<artifactId>itext-asian</artifactId>
+			<version>5.2.0</version>
+		</dependency>
 	</dependencies>
 	<!-- Maven 分离打包（瘦身 JAR）
 
